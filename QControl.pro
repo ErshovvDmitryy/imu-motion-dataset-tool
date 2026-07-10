@@ -1,0 +1,46 @@
+QT += core gui widgets serialport printsupport sql
+
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+
+CONFIG += c++11
+
+# You can make your code fail to compile if it uses deprecated APIs.
+# In order to do so, uncomment the following line.
+#DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
+
+SOURCES += \
+    connectionpage.cpp \
+    consolewidget.cpp \
+    databasemanager.cpp \
+    datasetpage.cpp \
+    leftmenuwidget.cpp \
+    livestreampage.cpp \
+    main.cpp \
+    mainwindow.cpp \
+    qcustomplot.cpp \
+    serialport.cpp \
+    sessionpage.cpp \
+    settingspage.cpp \
+    statusbarwidget.cpp
+
+HEADERS += \
+    connectionpage.h \
+    consolewidget.h \
+    databasemanager.h \
+    datasetpage.h \
+    leftmenuwidget.h \
+    livestreampage.h \
+    mainwindow.h \
+    qcustomplot.h \
+    serialport.h \
+    sessionpage.h \
+    settingspage.h \
+    statusbarwidget.h
+
+FORMS += \
+    mainwindow.ui
+
+# Default rules for deployment.
+qnx: target.path = /tmp/$${TARGET}/bin
+else: unix:!android: target.path = /opt/$${TARGET}/bin
+!isEmpty(target.path): INSTALLS += target
