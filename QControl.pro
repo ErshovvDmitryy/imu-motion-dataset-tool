@@ -9,36 +9,37 @@ CONFIG += c++11
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    connectionpage.cpp \
-    consolewidget.cpp \
-    databasemanager.cpp \
-    datasetpage.cpp \
-    leftmenuwidget.cpp \
-    livestreampage.cpp \
+    pages/connectionpage.cpp \
+    widgets/consolewidget.cpp \
+    core/databasemanager.cpp \
+    pages/datasetpage.cpp \
+    widgets/leftmenuwidget.cpp \
+    pages/livestreampage.cpp \
     main.cpp \
-    mainwindow.cpp \
-    qcustomplot.cpp \
-    serialport.cpp \
-    sessionpage.cpp \
-    settingspage.cpp \
-    statusbarwidget.cpp
+    ui/mainwindow.cpp \
+    qcustomplot/qcustomplot.cpp \
+    core/serialport.cpp \
+    pages/sessionpage.cpp \
+    pages/settingspage.cpp \
+    widgets/statusbarwidget.cpp
 
 HEADERS += \
-    connectionpage.h \
-    consolewidget.h \
-    databasemanager.h \
-    datasetpage.h \
-    leftmenuwidget.h \
-    livestreampage.h \
-    mainwindow.h \
-    qcustomplot.h \
-    serialport.h \
-    sessionpage.h \
-    settingspage.h \
-    statusbarwidget.h
+    pages/connectionpage.h \
+    widgets/consolewidget.h \
+    core/databasemanager.h \
+    pages/datasetpage.h \
+    widgets/leftmenuwidget.h \
+    pages/livestreampage.h \
+    ui/mainwindow.h \
+    qcustomplot/qcustomplot.h \
+    core/serialport.h \
+    pages/sessionpage.h \
+    pages/settingspage.h \
+    models/motionsample.h \
+    widgets/statusbarwidget.h
 
 FORMS += \
-    mainwindow.ui
+    ui/mainwindow.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

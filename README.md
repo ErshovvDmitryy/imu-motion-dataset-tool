@@ -10,7 +10,6 @@ Desktop application written in Qt 5.12 for collecting, visualizing and editing m
 - Motion session recording
 - CSV export
 - Dataset editing
-- TensorFlow/TinyML dataset preparation
 
 ## Stack
 
