@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <models/statusport.h>
 
 class QLabel;
 

@@ -10,36 +10,36 @@ CONFIG += c++11
 
 SOURCES += \
     pages/connectionpage.cpp \
+    pages/createdbdialog.cpp \
+    pages/databasepage.cpp \
+    pages/opendbdialog.cpp \
     widgets/consolewidget.cpp \
     core/databasemanager.cpp \
-    pages/datasetpage.cpp \
     widgets/leftmenuwidget.cpp \
-    pages/livestreampage.cpp \
     main.cpp \
     ui/mainwindow.cpp \
     qcustomplot/qcustomplot.cpp \
     core/serialport.cpp \
-    pages/sessionpage.cpp \
-    pages/settingspage.cpp \
     widgets/statusbarwidget.cpp
 
 HEADERS += \
+    models/MotionType.h \
+    models/packettype.h \
+    models/statusport.h \
     pages/connectionpage.h \
+    pages/createdbdialog.h \
+    pages/databasepage.h \
+    pages/opendbdialog.h \
     widgets/consolewidget.h \
     core/databasemanager.h \
-    pages/datasetpage.h \
     widgets/leftmenuwidget.h \
-    pages/livestreampage.h \
     ui/mainwindow.h \
     qcustomplot/qcustomplot.h \
     core/serialport.h \
-    pages/sessionpage.h \
-    pages/settingspage.h \
+    models/loglevel.h \
     models/motionsample.h \
+    models/portconfig.h \
     widgets/statusbarwidget.h
-
-FORMS += \
-    ui/mainwindow.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

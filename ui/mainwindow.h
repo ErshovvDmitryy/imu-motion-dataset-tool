@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QMainWindow>
+#include "pages/connectionpage.h"
+#include "pages/databasepage.h"
+#include "core/serialport.h"
+#include "core/databasemanager.h"
 
 class QStackedWidget;
 class QWidget;
@@ -32,8 +36,11 @@ private:
 
     StatusBarWidget *status;
 
-    QWidget *connectionPage;
+    ConnectionPage *connectionPage;
+    DataBasePage *datasetPage;
+    SerialPort *serialPort;
+    DatabaseManager *dataBaseManager;
+
     QWidget *livePage;
     QWidget *sessionPage;
-    QWidget *datasetPage;
 };

@@ -1,12 +1,12 @@
-#include "MainWindow.h"
+#include "ui/mainwindow.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QStackedWidget>
 
-#include "LeftMenuWidget.h"
-#include "ConsoleWidget.h"
-#include "StatusBarWidget.h"
+#include "widgets/leftmenuwidget.h"
+#include "widgets/consolewidget.h"
+#include "widgets/statusbarwidget.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -24,6 +24,10 @@ MainWindow::~MainWindow()
 
 void MainWindow::createWidgets()
 {
+    serialPort = new SerialPort;
+    dataBaseManager = new DatabaseManager;
+    dataBaseManager->initialize();
+
     centralWidget = new QWidget;
     setCentralWidget(centralWidget);
 
@@ -35,10 +39,13 @@ void MainWindow::createWidgets()
 
     status = new StatusBarWidget;
 
-    connectionPage = new QWidget;
+    connectionPage = new ConnectionPage;
+
+    datasetPage = new DataBasePage(dataBaseManager);
+
     livePage = new QWidget;
+
     sessionPage = new QWidget;
-    datasetPage = new QWidget;
 
     stack->addWidget(connectionPage);
     stack->addWidget(livePage);
@@ -65,5 +72,100 @@ void MainWindow::createLayouts()
 
 void MainWindow::connectSignals()
 {
+    connect(leftMenu,
+            &LeftMenuWidget::connectionClicked,
+            this,
+            [this]()
+    {
+        stack->setCurrentWidget(connectionPage);
+    });
+
+    connect(leftMenu,
+            &LeftMenuWidget::liveClicked,
+            this,
+            [this]()
+    {
+        stack->setCurrentWidget(livePage);
+    });
+
+    connect(leftMenu,
+            &LeftMenuWidget::sessionClicked,
+            this,
+            [this]()
+    {
+        stack->setCurrentWidget(sessionPage);
+    });
+
+    connect(leftMenu,
+            &LeftMenuWidget::datasetClicked,
+            this,
+            [this]()
+    {
+        stack->setCurrentWidget(datasetPage);
+    });
+
+    connect(serialPort,
+            &SerialPort::motionPacketReceived,
+            connectionPage,
+            &ConnectionPage::updateStream);
+
+    connect(serialPort,
+            &SerialPort::segmentEndReceived,
+            connectionPage,
+            &ConnectionPage::drawSeparator);
+
+    connect(connectionPage,
+            &ConnectionPage::updatePortsClicked,
+            this,
+            [this]()
+    {
+        connectionPage->setPorts(serialPort->updatePortList());
+    });
+
+    connect(connectionPage,
+            &ConnectionPage::connectPortClicked,
+            this,
+            [this]()
+    {
+        serialPort->openPort(connectionPage->connectTo());
+    });
+
+    connect(connectionPage,
+            &ConnectionPage::closePortClicked,
+            this,
+            [this]()
+    {
+        serialPort->closePort();
+    });
+
+    connect(serialPort,
+            &SerialPort::connectionChanged,
+            this,
+            [this](ConnectionState state)
+    {
+        QString text;
+        switch (state)
+        {
+        case ConnectionState::Connecting:   text = "Connecting...";  break;
+        case ConnectionState::Connected:    text = "Connected";      break;
+        case ConnectionState::Disconnected: text = "Disconnected";   break;
+        }
+        status->setStatus(text);
+    });
+
+    connect(serialPort,
+            &SerialPort::logMessage,
+            console,
+            &ConsoleWidget::logMessage);
+
+    connect(connectionPage,
+            &ConnectionPage::logMessage,
+            console,
+            &ConsoleWidget::logMessage);
+
+    connect(dataBaseManager,
+            &DatabaseManager::logMessage,
+            console,
+            &ConsoleWidget::logMessage);
 
 }

@@ -1,0 +1,20 @@
+# Build
+Makefile
+Makefile.Debug
+Makefile.Release
+object_script.*
+.qmake.stash
+
+# Build directories
+debug/
+release/
+
+# Qt Creator user files
+*.pro.user
+
+# Generated UI
+ui_mainwindow.h
+
+# Runtime artifacts
+*.db
+*.db-journal

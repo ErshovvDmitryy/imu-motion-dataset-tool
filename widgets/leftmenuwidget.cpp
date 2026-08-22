@@ -1,4 +1,4 @@
-#include "LeftMenuWidget.h"
+#include "widgets/leftmenuwidget.h"
 
 #include <QPushButton>
 #include <QVBoxLayout>

@@ -1,34 +1,14 @@
-#ifndef SERIALPORT_H
-#define SERIALPORT_H
-
-
+#pragma once
 
 #include <QObject>
 #include <QSerialPort>
-#include <QStringList>
-#include <QDebug>
+#include <QByteArray>
 #include <QSerialPortInfo>
-
-enum class ConnectionState
-{
-    Disconnected,
-    Connecting,
-    Connected
-};
-
-struct MotionSample
-{
-    float ax;
-    float ay;
-    float az;
-
-    float gx;
-    float gy;
-    float gz;
-
-    uint32_t time;
-};
-
+#include <models/motionsample.h>
+#include <models/packettype.h>
+#include <models/portconfig.h>
+#include <models/statusport.h>
+#include <models/loglevel.h>
 
 class SerialPort : public QObject
 {
@@ -38,26 +18,36 @@ public:
     explicit SerialPort(QObject *parent = nullptr);
     ~SerialPort();
 
-    void openPort(const QString& portName, int baudRate);
+    void openPort(const PortConfig &config);
     void closePort();
 
     bool connectStatus();
+    ConnectionState state() const;
 
     QStringList updatePortList();
 
 signals:
-    void dataReceived(const MotionSample& data);
+    void motionPacketReceived(const MotionPacket &packet);
+
+    void segmentEndReceived(const SegmentEndPacket &packet);
+
     void portDisconnected();
+
+    void connectionChanged(ConnectionState state);
+
+    void logMessage(LogLevel level, const QString &text);
 
 private slots:
     void readData();
     void handleError(QSerialPort::SerialPortError error);
 
-
 private:
+    void setState(ConnectionState state);
+
     QSerialPort *serial;
     QByteArray buffer;
+    ConnectionState currentState = ConnectionState::Disconnected;
 
+    bool parseMotionPacket(const QStringList &values, MotionPacket &packet);
+    bool parseSegmentEnd(const QStringList &values, SegmentEndPacket &packet);
 };
-
-#endif // SERIALPORT_H
