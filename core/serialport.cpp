@@ -1,4 +1,6 @@
 #include "core/serialport.h"
+#include "models/packettype.h"
+#include <QDebug>
 
 SerialPort::SerialPort(QObject *parent)
     : QObject(parent)
@@ -12,14 +14,11 @@ SerialPort::SerialPort(QObject *parent)
             this, &SerialPort::handleError);
 }
 
-SerialPort::~SerialPort()
-{
-
+SerialPort::~SerialPort() {
     serial->close();
 }
 
-void SerialPort::openPort(const PortConfig &config)
-{
+void SerialPort::openPort(const PortConfig &config) {
     setState(ConnectionState::Connecting);
 
     serial->setPortName(config.name);
@@ -38,8 +37,7 @@ void SerialPort::openPort(const PortConfig &config)
     }
 }
 
-void SerialPort::closePort()
-{
+void SerialPort::closePort() {
     if(serial->isOpen()) {
         serial->close();
         emit logMessage(LogLevel::Info, "Port closed");
@@ -48,18 +46,15 @@ void SerialPort::closePort()
     setState(ConnectionState::Disconnected);
 }
 
-bool SerialPort::connectStatus()
-{
+bool SerialPort::connectStatus() {
       return currentState == ConnectionState::Connected;
 }
 
-ConnectionState SerialPort::state() const
-{
+ConnectionState SerialPort::state() const {
     return currentState;
 }
 
-QStringList SerialPort::updatePortList()
-{
+QStringList SerialPort::updatePortList() {
     QStringList ports;
     const auto serialPorts = QSerialPortInfo::availablePorts();
     int i = 0;
@@ -72,8 +67,7 @@ QStringList SerialPort::updatePortList()
     return ports;
 }
 
-void SerialPort::setState(ConnectionState state)
-{
+void SerialPort::setState(ConnectionState state) {
     if (currentState == state)
         return;
 
@@ -135,10 +129,8 @@ void SerialPort::readData() {
     }
 }
 
-void SerialPort::handleError(QSerialPort::SerialPortError error)
-{
-    if (error == QSerialPort::ResourceError)
-    {
+void SerialPort::handleError(QSerialPort::SerialPortError error) {
+    if (error == QSerialPort::ResourceError) {
         emit logMessage(LogLevel::Error, "Serial port error, device disconnected");
         serial->close();
         setState(ConnectionState::Disconnected);
@@ -146,11 +138,8 @@ void SerialPort::handleError(QSerialPort::SerialPortError error)
     }
 }
 
-bool SerialPort::parseMotionPacket(const QStringList &values,
-                                   MotionPacket &packet)
-{
-    if (values.size() < 9)
-        return false;
+bool SerialPort::parseMotionPacket(const QStringList &values, MotionPacket &packet) {
+    if (values.size() < 9) return false;
 
     packet.sample.ax   = values[1].toFloat();
     packet.sample.ay   = values[2].toFloat();
@@ -167,11 +156,8 @@ bool SerialPort::parseMotionPacket(const QStringList &values,
     return true;
 }
 
-bool SerialPort::parseSegmentEnd(const QStringList &values,
-                                 SegmentEndPacket &packet)
-{
-    if (values.size() < 3)
-        return false;
+bool SerialPort::parseSegmentEnd(const QStringList &values, SegmentEndPacket &packet) {
+    if (values.size() < 3) return false;
 
     packet.count = values[1].toUInt();
     packet.crc16 = static_cast<uint16_t>(values[2].toUInt(nullptr, 16));

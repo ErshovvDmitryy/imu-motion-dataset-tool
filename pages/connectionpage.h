@@ -1,16 +1,28 @@
 #pragma once
 
-#include <QWidget>
 #include <QObject>
-#include <qcustomplot/qcustomplot.h>
-#include <models/motionsample.h>
-#include <models/portconfig.h>
-#include <models/loglevel.h>
+#include <QList>
+#include <QWidget>
+#include <QStringList>
+#include <QVector>
+#include <QMap>
+
+#include "models/motionsample.h"
+#include "models/MotionType.h"
+#include "models/portconfig.h"
+#include "models/loglevel.h"
 
 class QPushButton;
 class QVBoxLayout;
 class QHBoxLayout;
 class QComboBox;
+class QSplitter;
+class QCheckBox;
+class QCustomPlot;
+class QCPItemStraightLine;
+class QLabel;
+class QGroupBox;
+class QStackedWidget;
 
 class ConnectionPage : public QWidget
 {
@@ -22,6 +34,7 @@ public:
     void drawSeparator();
     void updateStream(const MotionPacket &packet);
     void setPorts(const QStringList &ports);
+    void setAvailableDatabases(const QStringList &databases);
     PortConfig connectTo();
 
 private:
@@ -41,17 +54,23 @@ private:
     void clearSeparators();
     void resetTime();
 
-    // Layout
+    QWidget *leftWidget;
+    QWidget *rightWidget;
+
+    QSplitter *mainSplitter;
+
     QHBoxLayout *mainLayout;
+    QVBoxLayout *leftLayout;
+    QVBoxLayout *rigthLayout;
+
+// =================== LEFT SIDE
 
     QVBoxLayout *settingsLayoutLeft;
-    QVBoxLayout *settingsLayoutRight;
     QVBoxLayout *settingsLayoutPort;
 
     QHBoxLayout *portSettingsLayout;
     QHBoxLayout *opCloseLayout;
 
-    // Widgets
     QComboBox *portList;
     QComboBox *baudRate;
 
@@ -59,9 +78,47 @@ private:
     QPushButton *btnClosePort;
     QPushButton *updatePortList;
 
+    QCheckBox *recordCheckBox;
+    QComboBox *targetDbCombo;
+
+// =================== RECORDED DATA (right, under recordCheckBox)
+
+    QGroupBox   *recordedDataGroup;
+    QStackedWidget *recordedDataStack;
+
+    QLabel      *noneModeLabel;
+
+    QLabel      *onceStatusLabel;
+    QPushButton *btnSaveOnce;
+    QPushButton *btnDiscardOnce;
+
+    QPushButton *btnPrevGesture;
+    QPushButton *btnNextGesture;
+    QLabel      *listIndexLabel;
+
+// =================== INFO BLOCK (right, under recorded data)
+
+    QGroupBox *infoGroup;
+    QLabel    *infoLengthLabel;
+    QLabel    *infoFreqLabel;
+    QLabel    *infoSamplesLabel;
+
+// =================== RIGHT SIDE
+    QHBoxLayout *settingTypeMethod;
+    QHBoxLayout *settingDBName;
+    QHBoxLayout *settingSelectMovement;
+
+    QHBoxLayout *underGraphLayout;
+
+    QVBoxLayout *settingsRightLeftArea;
+    QVBoxLayout *settingsRightRightArea;
+
     QCustomPlot *gyroGraph;
     QCustomPlot *accelGraph;
     QCustomPlot *liveDataPlot;
+
+    QComboBox *methodOfrecord;
+    QComboBox *motionType;
 
     double tempTime = 0;
     double deltaTime = 0;
@@ -77,6 +134,14 @@ signals:
     void updatePortsClicked();
     void connectPortClicked();
     void closePortClicked();
+
+    void recordingToggled(bool enabled);
+    void targetDatabaseChanged(const QString &dbName);
+
+    void saveOnceRequested();
+    void discardOnceRequested();
+    void prevGestureRequested();
+    void nextGestureRequested();
 
     void logMessage(LogLevel level, const QString &text);
 };

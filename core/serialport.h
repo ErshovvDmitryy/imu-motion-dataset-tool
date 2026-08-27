@@ -4,11 +4,11 @@
 #include <QSerialPort>
 #include <QByteArray>
 #include <QSerialPortInfo>
-#include <models/motionsample.h>
-#include <models/packettype.h>
-#include <models/portconfig.h>
-#include <models/statusport.h>
-#include <models/loglevel.h>
+
+#include "models/motionsample.h"
+#include "models/portconfig.h"
+#include "models/statusport.h"
+#include "models/loglevel.h"
 
 class SerialPort : public QObject
 {

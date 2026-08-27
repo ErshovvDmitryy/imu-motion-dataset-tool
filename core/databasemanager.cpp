@@ -1,11 +1,20 @@
 #include "core/databasemanager.h"
+
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QDebug>
+#include <QDir>
+#include <QFileInfo>
 #include <QSqlQuery>
 #include <QSqlRecord>
-#include <QStandardPaths>
-#include <QDebug>
-#include <QCoreApplication>
-#include <QTime>
-#include "widgets/consolewidget.h"
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QStringList>
+#include <QVector>
+
+#include "models/motionsample.h"
+#include "models/MotionType.h"
+
 
 int DatabaseManager::s_connectionCounter = 0;
 
@@ -17,8 +26,7 @@ DatabaseManager::DatabaseManager(QObject *parent)
     }
 }
 
-DatabaseManager::~DatabaseManager()
-{
+DatabaseManager::~DatabaseManager() {
     for (auto it = m_databases.begin(); it != m_databases.end(); ++it) {
         if (it->isOpen) {
             closeDatabase(it.key());
@@ -26,8 +34,7 @@ DatabaseManager::~DatabaseManager()
     }
 }
 
-bool DatabaseManager::initialize()
-{
+bool DatabaseManager::initialize() {
     if (m_isInitialized) {
         logMessage(LogLevel::Warning, QString("DatabaseManager already initialized"));
         return true;
@@ -79,8 +86,7 @@ bool DatabaseManager::initialize()
     return true;
 }
 
-bool DatabaseManager::createStartDatabase()
-{
+bool DatabaseManager::createStartDatabase() {
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE",
                                                  generateConnectionName());
     db.setDatabaseName(m_startDbFilePath);
@@ -127,8 +133,7 @@ bool DatabaseManager::createStartDatabase()
     return true;
 }
 
-bool DatabaseManager::createStartTables()
-{
+bool DatabaseManager::createStartTables() {
     QSqlDatabase db = getDatabase(m_startDbName);
     if (!db.isOpen()) {
         return false;
@@ -149,8 +154,7 @@ bool DatabaseManager::createStartTables()
     return true;
 }
 
-bool DatabaseManager::loadRegisteredDatabases()
-{
+bool DatabaseManager::loadRegisteredDatabases() {
     QSqlDatabase db = getDatabase(m_startDbName);
     if (!db.isOpen()) {
         return false;
@@ -183,8 +187,7 @@ bool DatabaseManager::loadRegisteredDatabases()
     return true;
 }
 
-QSqlDatabase DatabaseManager::openDatabase(const QString &dbName)
-{
+QSqlDatabase DatabaseManager::openDatabase(const QString &dbName) {
     if (!m_databases.contains(dbName)) {
         return QSqlDatabase();
     }
@@ -204,9 +207,11 @@ QSqlDatabase DatabaseManager::openDatabase(const QString &dbName)
 
     if (!db.open()) {
         emit errorOccurred(QString("Failed to open database %1: %2")
-                          .arg(dbName, db.lastError().text()));
+                              .arg(dbName, db.lastError().text()));
         return QSqlDatabase();
     }
+
+    db.exec("PRAGMA foreign_keys = ON");
 
     info.isOpen = true;
     emit databaseOpened(dbName);
@@ -214,8 +219,7 @@ QSqlDatabase DatabaseManager::openDatabase(const QString &dbName)
     return db;
 }
 
-void DatabaseManager::closeDatabase(const QString &dbName)
-{
+void DatabaseManager::closeDatabase(const QString &dbName) {
     if (!m_databases.contains(dbName)) {
         return;
     }
@@ -236,13 +240,11 @@ void DatabaseManager::closeDatabase(const QString &dbName)
     emit databaseClosed(dbName);
 }
 
-bool DatabaseManager::isDatabaseOpen(const QString &dbName) const
-{
+bool DatabaseManager::isDatabaseOpen(const QString &dbName) const {
     return m_databases.contains(dbName) && m_databases[dbName].isOpen;
 }
 
-QSqlDatabase DatabaseManager::getDatabase(const QString &dbName) const
-{
+QSqlDatabase DatabaseManager::getDatabase(const QString &dbName) const {
     if (!m_databases.contains(dbName)) {
         return QSqlDatabase();
     }
@@ -255,10 +257,7 @@ QSqlDatabase DatabaseManager::getDatabase(const QString &dbName) const
     return QSqlDatabase::database(info.connectionName);
 }
 
-bool DatabaseManager::registerDatabase(const QString &dbName,
-                                        const QString &filePath,
-                                        const QString &description)
-{
+bool DatabaseManager::registerDatabase(const QString &dbName, const QString &filePath, const QString &description) {
     if (m_databases.contains(dbName)) {
         return false;
     }
@@ -294,8 +293,7 @@ bool DatabaseManager::registerDatabase(const QString &dbName,
     return true;
 }
 
-bool DatabaseManager::unregisterDatabase(const QString &dbName)
-{
+bool DatabaseManager::unregisterDatabase(const QString &dbName) {
     if (!m_databases.contains(dbName)) {
         return false;
     }
@@ -318,8 +316,7 @@ bool DatabaseManager::unregisterDatabase(const QString &dbName)
     return true;
 }
 
-QStringList DatabaseManager::scanForDatabases(const QString &path) const
-{
+QStringList DatabaseManager::scanForDatabases(const QString &path) const {
     QStringList foundDatabases;
     QString searchPath = path.isEmpty() ? getDefaultDatabasePath() : path;
 
@@ -342,8 +339,7 @@ QStringList DatabaseManager::scanForDatabases(const QString &path) const
     return foundDatabases;
 }
 
-bool DatabaseManager::validateDatabase(const QString &filePath) const
-{
+bool DatabaseManager::validateDatabase(const QString &filePath) const {
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "temp_validation");
     db.setDatabaseName(filePath);
 
@@ -360,8 +356,7 @@ bool DatabaseManager::validateDatabase(const QString &filePath) const
     return isValid;
 }
 
-bool DatabaseManager::removeDatabase(const QString &dbName, bool deleteFile)
-{
+bool DatabaseManager::removeDatabase(const QString &dbName, bool deleteFile) {
     if (!m_databases.contains(dbName)) {
         return false;
     }
@@ -386,20 +381,18 @@ bool DatabaseManager::removeDatabase(const QString &dbName, bool deleteFile)
     return true;
 }
 
-QStringList DatabaseManager::getTableNames(const QString &dbName) const
-{
-    QSqlDatabase db = getDatabase(dbName);
+QStringList DatabaseManager::getTableNames(const QString &dbName) {
+    QSqlDatabase db = openDatabase(dbName);
     if (!db.isOpen()) {
+        qDebug() << "Нет доступа " << dbName;
         return QStringList();
     }
 
     return db.tables();
 }
 
-int DatabaseManager::getTableRowCount(const QString &dbName,
-                                      const QString &tableName) const
-{
-    QSqlDatabase db = getDatabase(dbName);
+int DatabaseManager::getTableRowCount(const QString &dbName, const QString &tableName) {
+    QSqlDatabase db = openDatabase(dbName);
     if (!db.isOpen()) {
         return -1;
     }
@@ -414,8 +407,29 @@ int DatabaseManager::getTableRowCount(const QString &dbName,
     return -1;
 }
 
-QString DatabaseManager::getDefaultDatabasePath() const
-{
+QStringList DatabaseManager::getTableRowsNames(const QString &dbName, const QString &tableName) {
+    QSqlDatabase db = openDatabase(dbName);
+
+    if (!db.isOpen()) {
+        return QStringList();
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QString("SELECT * FROM %1").arg(tableName));
+
+    QStringList columnNames;
+
+    if (query.exec()) {
+        QSqlRecord record = query.record();
+        for (int i = 0; i < record.count(); i++) {
+            columnNames.append(record.fieldName(i));
+        }
+    }
+
+    return columnNames;
+}
+
+QString DatabaseManager::getDefaultDatabasePath() const {
     QString appPath = QCoreApplication::applicationDirPath();
     QDir dir(appPath);
 
@@ -427,8 +441,7 @@ QString DatabaseManager::getDefaultDatabasePath() const
     return dataPath;
 }
 
-QString DatabaseManager::getStartDatabasePath() const
-{
+QString DatabaseManager::getStartDatabasePath() const {
     return getDefaultDatabasePath() + "/" + m_startDbName + ".db";
 }
 
@@ -439,21 +452,18 @@ QString DatabaseManager::generateConnectionName() const
            .arg(QDateTime::currentMSecsSinceEpoch());
 }
 
-QStringList DatabaseManager::getRegisteredDatabases() const
-{
+QStringList DatabaseManager::getRegisteredDatabases() const {
     return m_databases.keys();
 }
 
-QString DatabaseManager::getDatabasePath(const QString &dbName) const
-{
+QString DatabaseManager::getDatabasePath(const QString &dbName) const {
     if (!m_databases.contains(dbName)) {
         return QString();
     }
     return m_databases[dbName].filePath;
 }
 
-QString DatabaseManager::getDatabaseDescription(const QString &dbName) const
-{
+QString DatabaseManager::getDatabaseDescription(const QString &dbName) const {
     if (!m_databases.contains(dbName)) {
         return QString();
     }
@@ -484,85 +494,259 @@ bool DatabaseManager::importDatabase(const QString &filePath,
     return registerDatabase(dbName, filePath, description);
 }
 
-bool DatabaseManager::createDatasetDatabase(const QString &dbName,
-                                            const QString &path,
-                                            const QString &description)
-{
-    QString filePath = path + "/" + dbName + ".db";
+bool DatabaseManager::createDatasetDatabase( const QString &dbName, const QString &path, const QString &description) {
+    const QString filePath = path + "/" + dbName + ".db";
 
     if (QFileInfo::exists(filePath)) {
-        emit errorOccurred(QString("File already exists: %1").arg(filePath));
+        emit errorOccurred(
+            QString("File already exists: %1").arg(filePath));
         return false;
     }
 
     QDir dir(path);
-    if (!dir.exists()) {
-        if (!dir.mkpath(path)) {
-            emit errorOccurred(QString("Failed to create directory: %1").arg(path));
-            return false;
-        }
+
+    if (!dir.exists() && !dir.mkpath(path)) {
+        emit errorOccurred(
+            QString("Failed to create directory: %1").arg(path));
+        return false;
     }
 
-    QString connName = generateConnectionName();
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connName);
-    db.setDatabaseName(filePath);
+    const QString connName = generateConnectionName();
 
-    if (!db.open()) {
-        emit errorOccurred(QString("Failed to create database: %1").arg(db.lastError().text()));
-        QSqlDatabase::removeDatabase(connName);
+    {
+        QSqlDatabase db =
+            QSqlDatabase::addDatabase("QSQLITE", connName);
+
+        db.setDatabaseName(filePath);
+
+        if (!db.open()) {
+            emit errorOccurred(
+                QString("Failed to create database: %1")
+                    .arg(db.lastError().text()));
+
+            db = QSqlDatabase();
+            QSqlDatabase::removeDatabase(connName);
+            return false;
+        }
+
+        db.exec("PRAGMA foreign_keys = ON");
+
+        if (!db.transaction()) {
+            emit errorOccurred(
+                QString("Failed to start transaction: %1")
+                    .arg(db.lastError().text()));
+
+            db.close();
+            db = QSqlDatabase();
+            QSqlDatabase::removeDatabase(connName);
+            return false;
+        }
+
+        QSqlQuery query(db);
+
+        if (!query.exec(
+                "CREATE TABLE IF NOT EXISTS motion_types ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "description TEXT, "
+                "is_export INTEGER DEFAULT 0, "
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                ")"
+            )) {
+                emit errorOccurred(QString("Failed to create motion_types: %1").arg(query.lastError().text()));
+                db.close();
+                QSqlDatabase::removeDatabase(connName);
+                return false;
+            }
+
+        query.prepare("INSERT OR REPLACE INTO motion_types (id, description, is_export) "
+                      "VALUES (1, :description, 0)");
+        query.bindValue(":description", description);
+
+       if (!query.exec())
+       {
+           emit errorOccurred(
+               QString("Failed to update db state: %1")
+                   .arg(query.lastError().text()));
+       }
+
+        if (!query.exec(
+            "CREATE TABLE samples ("
+            "id INTEGER PRIMARY KEY,"
+            "motion_type INTEGER NOT NULL,"
+            "sample_count INTEGER NOT NULL,"
+            "crc16 INTEGER,"
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"))
+        {
+            db.rollback();
+
+            emit errorOccurred(
+                QString("Failed to create samples: %1")
+                    .arg(query.lastError().text()));
+
+            db.close();
+            db = QSqlDatabase();
+            QSqlDatabase::removeDatabase(connName);
+            return false;
+        }
+
+        if (!query.exec(
+            "CREATE TABLE motion_data ("
+            "id INTEGER PRIMARY KEY,"
+            "sample_id INTEGER NOT NULL,"
+            "sample_index INTEGER NOT NULL,"
+            "ax REAL NOT NULL,"
+            "ay REAL NOT NULL,"
+            "az REAL NOT NULL,"
+            "gx REAL NOT NULL,"
+            "gy REAL NOT NULL,"
+            "gz REAL NOT NULL,"
+            "timestamp INTEGER NOT NULL,"
+            "FOREIGN KEY (sample_id) REFERENCES samples(id)"
+            ")"))
+        {
+            db.rollback();
+
+            emit errorOccurred(
+                QString("Failed to create motion_data: %1")
+                    .arg(query.lastError().text()));
+
+            db.close();
+            db = QSqlDatabase();
+            QSqlDatabase::removeDatabase(connName);
+            return false;
+        }
+
+        if (!db.commit()) {
+            emit errorOccurred(
+                QString("Failed to commit database: %1")
+                    .arg(db.lastError().text()));
+
+            db.close();
+            db = QSqlDatabase();
+            QSqlDatabase::removeDatabase(connName);
+            return false;
+        }
+
+        db.close();
+    }
+
+    QSqlDatabase::removeDatabase(connName);
+
+    return registerDatabase(
+        dbName,
+        filePath,
+        description);
+}
+
+bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, const QVector<MotionSample> &samples, uint16_t crc16) {
+    qDebug() << "insertGesture";
+
+    if (samples.isEmpty())
+        return false;
+
+    QSqlDatabase db = openDatabase(dbName);
+    if (!db.isOpen()) {
+        emit errorOccurred(QString("Cannot open database %1 for insert").arg(dbName));
+        return false;
+    }
+
+    if (!db.transaction()) {
+        emit errorOccurred(QString("Failed to start transaction: %1").arg(db.lastError().text()));
         return false;
     }
 
     QSqlQuery query(db);
 
-    if (!query.exec(
-        "CREATE TABLE IF NOT EXISTS motion_types ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "name TEXT UNIQUE NOT NULL, "
-        "description TEXT, "
-        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-        ")"
-    )) {
-        emit errorOccurred(QString("Failed to create motion_types: %1").arg(query.lastError().text()));
-        db.close();
-        QSqlDatabase::removeDatabase(connName);
+    MotionSample s = samples.at(0);
+    qDebug() << s.ax << " " << s.ay << " " << s.az;
+    qDebug() << s.gx << " " << s.gy << " " << s.gz;
+    qDebug() << s.time;
+
+    query.prepare("INSERT INTO samples (motion_type, sample_count, crc16) "
+                  "VALUES (:motion_type, :sample_count, :crc16)");
+    query.bindValue(":motion_type", static_cast<int>(type));
+    query.bindValue(":sample_count", samples.size());
+    query.bindValue(":crc16", crc16);
+
+    if (!query.exec()) {
+        emit errorOccurred(QString("Failed to insert sample: %1").arg(query.lastError().text()));
+        db.rollback();
         return false;
     }
 
-    if (!query.exec(
-        "CREATE TABLE IF NOT EXISTS segments ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "motion_type_id INTEGER, "
-        "sample_count INTEGER DEFAULT 0, "
-        "crc16 INTEGER, "
-        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-        "FOREIGN KEY (motion_type_id) REFERENCES motion_types(id)"
-        ")"
-    )) {
-        emit errorOccurred(QString("Failed to create segments: %1").arg(query.lastError().text()));
-        db.close();
-        QSqlDatabase::removeDatabase(connName);
+    const int sampleId = query.lastInsertId().toInt();
+
+    query.prepare("INSERT INTO motion_data "
+                  "(sample_id, sample_index, ax, ay, az, gx, gy, gz, timestamp) "
+                  "VALUES (:sample_id, :sample_index, :ax, :ay, :az, :gx, :gy, :gz, :timestamp)");
+
+    for (int i = 0; i < samples.size(); ++i) {
+        const MotionSample &s = samples.at(i);
+        query.bindValue(":sample_id", sampleId);
+        query.bindValue(":sample_index", i);
+        query.bindValue(":ax", s.ax);
+        query.bindValue(":ay", s.ay);
+        query.bindValue(":az", s.az);
+        query.bindValue(":gx", s.gx);
+        query.bindValue(":gy", s.gy);
+        query.bindValue(":gz", s.gz);
+        query.bindValue(":timestamp", static_cast<qint64>(s.time));
+
+        if (!query.exec()) {
+            emit errorOccurred(QString("Failed to insert motion_data: %1").arg(query.lastError().text()));
+            db.rollback();
+            return false;
+        }
+    }
+
+    if (!db.commit()) {
+        emit errorOccurred(QString("Failed to commit: %1").arg(db.lastError().text()));
+        db.rollback();
         return false;
     }
 
-    if (!query.exec(
-        "CREATE TABLE IF NOT EXISTS samples ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "segment_id INTEGER NOT NULL, "
-        "ax REAL, ay REAL, az REAL, "
-        "gx REAL, gy REAL, gz REAL, "
-        "timestamp INTEGER, "
-        "FOREIGN KEY (segment_id) REFERENCES segments(id)"
-        ")"
-    )) {
-        emit errorOccurred(QString("Failed to create samples: %1").arg(query.lastError().text()));
-        db.close();
-        QSqlDatabase::removeDatabase(connName);
+    return true;
+}
+
+bool DatabaseManager::updateGestureMotionType(const QString &dbName, int sampleId, MotionType type) {
+    QSqlDatabase db = openDatabase(dbName);
+    if (!db.isOpen())
         return false;
+
+    QSqlQuery query(db);
+    query.prepare("UPDATE samples SET motion_type = :motion_type WHERE id = :id");
+    query.bindValue(":motion_type", static_cast<int>(type));
+    query.bindValue(":id", sampleId);
+
+    if (!query.exec()) {
+        emit errorOccurred(QString("Failed to update motion type: %1").arg(query.lastError().text()));
+        return false;
+    }
+    return true;
+}
+
+bool DatabaseManager::isExportDatabase(const QString &datasetDbName) const {
+    if (!m_databases.contains(datasetDbName))
+        return false;
+
+    const DatabaseInfo &info = m_databases[datasetDbName];
+    if (!QFileInfo::exists(info.filePath))
+        return false;
+
+    const QString connName = generateConnectionName();
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connName);
+    db.setDatabaseName(info.filePath);
+
+    bool result = false;
+    if (db.open()) {
+        db.exec("PRAGMA foreign_keys = ON");
+        QSqlQuery query(db);
+        if (query.exec("SELECT is_export FROM motion_types WHERE id = 1") && query.next())
+            result = query.value(0).toInt() != 0;
     }
 
     db.close();
     QSqlDatabase::removeDatabase(connName);
-
-    return registerDatabase(dbName, filePath, description);
+    return result;
 }

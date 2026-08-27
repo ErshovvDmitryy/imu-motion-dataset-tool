@@ -1,7 +1,6 @@
 #pragma once
 
-enum class PacketType
-{
+enum class PacketType {
     LiveMotion  = 106,
     SegmentEnd  = 107,
 

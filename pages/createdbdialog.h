@@ -10,7 +10,6 @@ class QTextEdit;
 class QLabel;
 class QLineEdit;
 
-
 class CreateDBDialog: public QDialog
 {
     Q_OBJECT

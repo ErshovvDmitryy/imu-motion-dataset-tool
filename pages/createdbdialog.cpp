@@ -1,4 +1,4 @@
-#include "createdbdialog.h"
+#include "pages/createdbdialog.h"
 
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -9,14 +9,13 @@
 #include <QFileDialog>
 #include <QStandardPaths>
 #include <QDebug>
+#include <QStringList>
 
-CreateDBDialog::CreateDBDialog(QWidget *parent)
-{
+CreateDBDialog::CreateDBDialog(QWidget *parent) {
     setupUI();
 }
 
-QStringList CreateDBDialog::returnDBdata()
-{
+QStringList CreateDBDialog::returnDBdata() {
     QStringList data;
     data.append(m_fileName->text());
     data.append(m_pathEdit->text());
@@ -36,13 +35,11 @@ void CreateDBDialog::onOkClicked()
 
 }
 
-void CreateDBDialog::onCancelClicked()
-{
+void CreateDBDialog::onCancelClicked() {
     reject();
 }
 
-void CreateDBDialog::onEditPathClicked()
-{
+void CreateDBDialog::onEditPathClicked() {
     QString dirPath = QFileDialog::getExistingDirectory(
             this,
             tr("Select folder for database"),
@@ -58,8 +55,7 @@ void CreateDBDialog::onEditPathClicked()
 
 }
 
-void CreateDBDialog::setupUI()
-{
+void CreateDBDialog::setupUI() {
     setWindowTitle("Exec db");
     setMinimumSize(400, 250);
     setModal(true);

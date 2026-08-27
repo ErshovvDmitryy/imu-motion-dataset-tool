@@ -1,7 +1,8 @@
 #pragma once
 
 #include <QWidget>
-#include <models/loglevel.h>
+
+#include "models/loglevel.h"
 
 class QTextEdit;
 

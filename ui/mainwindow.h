@@ -1,13 +1,14 @@
 #pragma once
 
 #include <QMainWindow>
+
+#include "core/databasemanager.h"
+#include "core/serialport.h"
+#include "core/motionrecorder.h"
 #include "pages/connectionpage.h"
 #include "pages/databasepage.h"
-#include "core/serialport.h"
-#include "core/databasemanager.h"
 
 class QStackedWidget;
-class QWidget;
 
 class LeftMenuWidget;
 class ConsoleWidget;
@@ -40,6 +41,7 @@ private:
     DataBasePage *datasetPage;
     SerialPort *serialPort;
     DatabaseManager *dataBaseManager;
+    MotionRecorder *m_motionRecorder = nullptr;
 
     QWidget *livePage;
     QWidget *sessionPage;

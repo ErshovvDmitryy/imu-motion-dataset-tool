@@ -20,9 +20,11 @@ SOURCES += \
     ui/mainwindow.cpp \
     qcustomplot/qcustomplot.cpp \
     core/serialport.cpp \
-    widgets/statusbarwidget.cpp
+    widgets/statusbarwidget.cpp \
+    core/motionrecorder.cpp
 
 HEADERS += \
+    models/AnalysisConfig.h \
     models/MotionType.h \
     models/packettype.h \
     models/statusport.h \
@@ -39,7 +41,8 @@ HEADERS += \
     models/loglevel.h \
     models/motionsample.h \
     models/portconfig.h \
-    widgets/statusbarwidget.h
+    widgets/statusbarwidget.h \
+    core/motionrecorder.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

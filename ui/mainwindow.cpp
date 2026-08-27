@@ -18,12 +18,13 @@ MainWindow::MainWindow(QWidget *parent)
     connectSignals();
 }
 
-MainWindow::~MainWindow()
-{
+MainWindow::~MainWindow() {
+    delete m_motionRecorder;
+    serialPort->~SerialPort();
+    dataBaseManager->~DatabaseManager();
 }
 
-void MainWindow::createWidgets()
-{
+void MainWindow::createWidgets() {
     serialPort = new SerialPort;
     dataBaseManager = new DatabaseManager;
     dataBaseManager->initialize();
@@ -40,6 +41,8 @@ void MainWindow::createWidgets()
     status = new StatusBarWidget;
 
     connectionPage = new ConnectionPage;
+
+    m_motionRecorder = new MotionRecorder(dataBaseManager);
 
     datasetPage = new DataBasePage(dataBaseManager);
 
@@ -70,8 +73,7 @@ void MainWindow::createLayouts()
     mainLayout->setStretch(1,6);
 }
 
-void MainWindow::connectSignals()
-{
+void MainWindow::connectSignals() {
     connect(leftMenu,
             &LeftMenuWidget::connectionClicked,
             this,
@@ -113,6 +115,35 @@ void MainWindow::connectSignals()
             &SerialPort::segmentEndReceived,
             connectionPage,
             &ConnectionPage::drawSeparator);
+
+    connect(serialPort,
+            &SerialPort::motionPacketReceived,
+            m_motionRecorder,
+            &MotionRecorder::onSample);
+
+    /*connect(serialPort,
+            &SerialPort::segmentEndReceived,
+            m_motionRecorder,
+            &MotionRecorder::onSegmentEnd);*/
+
+    connect(connectionPage,
+            &ConnectionPage::recordingToggled,
+            m_motionRecorder,
+            &MotionRecorder::setRecording);
+
+    connect(connectionPage,
+            &ConnectionPage::targetDatabaseChanged,
+            m_motionRecorder,
+            &MotionRecorder::setTargetDatabase);
+
+    auto refreshDatabases = [this]() {
+        connectionPage->setAvailableDatabases(dataBaseManager->getRegisteredDatabases());
+    };
+    connect(dataBaseManager,
+            &DatabaseManager::databaseRegistered,
+            this,
+            refreshDatabases);
+    refreshDatabases();
 
     connect(connectionPage,
             &ConnectionPage::updatePortsClicked,

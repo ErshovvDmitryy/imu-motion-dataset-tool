@@ -1,4 +1,4 @@
-#include "opendbdialog.h"
+#include "pages/opendbdialog.h"
 
 #include <QListWidget>
 #include <QPushButton>
@@ -22,8 +22,7 @@ OpenDBDialog::OpenDBDialog(const QStringList &registeredDbs,
     loadRegisteredDatabases(registeredDbs);
 }
 
-void OpenDBDialog::setupUI()
-{
+void OpenDBDialog::setupUI() {
     setWindowTitle("Open Database");
     setMinimumSize(500, 400);
     setModal(true);
@@ -95,8 +94,7 @@ void OpenDBDialog::setupUI()
             this, &OpenDBDialog::onCancelClicked);
 }
 
-void OpenDBDialog::loadRegisteredDatabases(const QStringList &dbs)
-{
+void OpenDBDialog::loadRegisteredDatabases(const QStringList &dbs) {
     m_dbList->clear();
 
     if (dbs.isEmpty()) {
@@ -115,14 +113,12 @@ void OpenDBDialog::loadRegisteredDatabases(const QStringList &dbs)
     }
 }
 
-void OpenDBDialog::onSelectFromList()
-{
+void OpenDBDialog::onSelectFromList() {
     // Этот слот вызывается при выборе из списка
     // Реализовано через сигнал itemSelectionChanged
 }
 
-void OpenDBDialog::onSelectCustom()
-{
+void OpenDBDialog::onSelectCustom() {
     QString filePath = QFileDialog::getOpenFileName(
         this,
         "Select Database File",
@@ -143,8 +139,7 @@ void OpenDBDialog::onSelectCustom()
     m_selectedDatabase = filePath;
 }
 
-void OpenDBDialog::onItemDoubleClicked()
-{
+void OpenDBDialog::onItemDoubleClicked() {
     if (m_dbList->currentItem()) {
         m_selectedDatabase = m_dbList->currentItem()->text();
         m_isCustomPath = false;
@@ -152,8 +147,7 @@ void OpenDBDialog::onItemDoubleClicked()
     }
 }
 
-void OpenDBDialog::onOkClicked()
-{
+void OpenDBDialog::onOkClicked() {
     if (m_isCustomPath) {
         if (m_pathEdit->text().isEmpty()) {
             QMessageBox::warning(this, "No File", "Please select a file!");
@@ -171,12 +165,10 @@ void OpenDBDialog::onOkClicked()
     accept();
 }
 
-void OpenDBDialog::onCancelClicked()
-{
+void OpenDBDialog::onCancelClicked() {
     reject();
 }
 
-QString OpenDBDialog::getSelectedDatabase() const
-{
+QString OpenDBDialog::getSelectedDatabase() const {
     return m_selectedDatabase;
 }

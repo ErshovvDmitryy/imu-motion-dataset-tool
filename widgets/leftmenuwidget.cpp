@@ -6,7 +6,8 @@
 LeftMenuWidget::LeftMenuWidget(QWidget *parent)
     : QWidget(parent)
 {
-    setMinimumWidth(180);
+    setMinimumWidth(80);
+    setMaximumWidth(100);
 
     auto *layout = new QVBoxLayout(this);
 

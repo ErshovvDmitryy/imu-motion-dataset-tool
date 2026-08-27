@@ -1,7 +1,6 @@
 #pragma once
 
-struct MotionSample
-{
+struct MotionSample {
     float ax;
     float ay;
     float az;
@@ -13,14 +12,12 @@ struct MotionSample
     uint32_t time;
 };
 
-struct MotionPacket
-{
+struct MotionPacket {
     MotionSample sample;
     bool recording;
 };
 
-struct SegmentEndPacket
-{
+struct SegmentEndPacket {
     uint32_t count;
     uint16_t crc16;
 };

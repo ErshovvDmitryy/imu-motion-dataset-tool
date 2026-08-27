@@ -2,8 +2,7 @@
 
 #include <QString>
 
-struct PortConfig
-{
+struct PortConfig {
     QString name;
     int baud = 115200;
 };

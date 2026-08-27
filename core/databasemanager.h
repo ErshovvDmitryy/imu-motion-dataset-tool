@@ -1,14 +1,14 @@
 #pragma once
 
 #include <QObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QStringList>
 #include <QMap>
-#include <QFileInfo>
-#include <QDir>
+#include <QStringList>
+#include <QSqlDatabase>
+#include <QVector>
+
 #include "models/loglevel.h"
+#include "models/motionsample.h"
+#include "models/MotionType.h"
 
 class DatabaseManager : public QObject
 {
@@ -29,6 +29,7 @@ public:
     void closeDatabase(const QString &dbName);
     bool isDatabaseOpen(const QString &dbName) const;
 
+    QStringList getTableNameFromDatabase() const;
     QStringList getRegisteredDatabases() const;
     QString getDatabasePath(const QString &dbName) const;
     QString getDatabaseDescription(const QString &dbName) const;
@@ -41,8 +42,16 @@ public:
     bool createDatasetDatabase(const QString &dbName, const QString &path,
                                const QString &description = QString());
 
-    QStringList getTableNames(const QString &dbName) const;
-    int getTableRowCount(const QString &dbName, const QString &tableName) const;
+    QStringList getTableNames(const QString &dbName);
+    int getTableRowCount(const QString &dbName, const QString &tableName);
+    QStringList getTableRowsNames(const QString &dbName, const QString &tableName);
+
+    bool insertGesture(const QString &dbName,
+                       MotionType type,
+                       const QVector<MotionSample> &samples,
+                       uint16_t crc16);
+    bool updateGestureMotionType(const QString &dbName, int sampleId, MotionType type);
+    bool isExportDatabase(const QString &datasetDbName) const;
 
 signals:
     void databaseRegistered(const QString &dbName);
