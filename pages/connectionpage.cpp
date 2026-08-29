@@ -4,7 +4,6 @@
 
 #include <QDebug>
 #include <QLabel>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QPushButton>
 #include <QHBoxLayout>
@@ -13,6 +12,8 @@
 #include <QGroupBox>
 #include <QStackedWidget>
 #include <QGridLayout>
+#include <QMessageBox>
+#include <QMouseEvent>
 
 ConnectionPage::ConnectionPage(QWidget *parent)
     : QWidget(parent)
@@ -34,6 +35,8 @@ void ConnectionPage::createWidgets() {
     rightWidget = new QWidget();
 
     mainSplitter = new QSplitter(Qt::Horizontal, this);
+
+    rightUnderGraphLayout = new QGridLayout();
 
 // =================== LEFT SIDE
 
@@ -70,18 +73,18 @@ void ConnectionPage::createWidgets() {
     methodOfrecord->addItem("List method");
 
     motionType = new QComboBox();
-    motionType->addItem("DoubleTap");
-    motionType->addItem("SwipeLeft");
-    motionType->addItem("SwipeRight");
-    motionType->addItem("SwipeUp");
-    motionType->addItem("SwipeDown");
-    motionType->addItem("CircleCW");
-    motionType->addItem("CircleCCW");
-    motionType->addItem("Shake");
-    motionType->addItem("NormalHandMovement");
-    motionType->addItem("Walking");
-    motionType->addItem("Unlabeled");
-    motionType->addItem("Unknown");
+    motionType->addItem("DoubleTap", static_cast<int>(MotionType::DoubleTap));
+    motionType->addItem("SwipeLeft", static_cast<int>(MotionType::SwipeLeft));
+    motionType->addItem("SwipeRight", static_cast<int>(MotionType::SwipeRight));
+    motionType->addItem("SwipeUp", static_cast<int>(MotionType::SwipeUp));
+    motionType->addItem("SwipeDown", static_cast<int>(MotionType::SwipeDown));
+    motionType->addItem("CircleCW", static_cast<int>(MotionType::CircleCW));
+    motionType->addItem("CircleCCW", static_cast<int>(MotionType::CircleCCW));
+    motionType->addItem("Shake", static_cast<int>(MotionType::Shake));
+    motionType->addItem("NormalHandMovement", static_cast<int>(MotionType::NormalHandMovement));
+    motionType->addItem("Walking", static_cast<int>(MotionType::Walking));
+    motionType->addItem("Unlabeled", static_cast<int>(MotionType::Unlabeled));
+    motionType->addItem("Unknown", static_cast<int>(MotionType::Unknown));
 
     gyroGraph = new QCustomPlot();
     accelGraph= new QCustomPlot();
@@ -115,7 +118,6 @@ void ConnectionPage::createWidgets() {
     liveDataPlot->xAxis->setLabel("Time (s)");
     liveDataPlot->yAxis->setLabel("Total Accel (g)");
 
-    recordCheckBox = new QCheckBox("Start saves record");
     targetDbCombo = new QComboBox();
 
 // =================== RECORDED DATA
@@ -123,12 +125,10 @@ void ConnectionPage::createWidgets() {
     recordedDataGroup = new QGroupBox("Recorded Data");
     recordedDataStack = new QStackedWidget();
 
-    // Page 0: None mode
     noneModeLabel = new QLabel("Recording disabled");
     noneModeLabel->setAlignment(Qt::AlignCenter);
     noneModeLabel->setStyleSheet("color: gray;");
 
-    // Page 1: Once + List mode (shared page)
     onceStatusLabel = new QLabel("Buffer: 0 samples");
     btnSaveOnce = new QPushButton("Save");
     btnDiscardOnce = new QPushButton("Discard");
@@ -184,18 +184,50 @@ void ConnectionPage::createWidgets() {
     btnSaveOnce->setEnabled(false);
     btnDiscardOnce->setEnabled(false);
 
+// =================== TRIM BLOCK
+
+    trimBlock = new QGroupBox("Trim block");
+
+    btnTrimStart = new QPushButton("Use trim");
+    btnTrimAccept = new QPushButton("Accept");
+    btnTrimDeny = new QPushButton("Deny");
+
+    btnTrimStart->setFixedWidth(80);
+    btnTrimAccept->setFixedWidth(80);
+    btnTrimDeny->setFixedWidth(100);
+
+    btnTrimStart->setEnabled(false);
+    btnTrimAccept->setEnabled(false);
+    btnTrimDeny->setEnabled(false);
+
+    recordTimeTrim = new QLabel("0 / 0");
+
+    QWidget *trimPage = new QWidget();
+    QHBoxLayout *trimLayout = new QHBoxLayout(trimPage);
+    trimLayout->setContentsMargins(0, 0, 0, 0);
+    trimLayout->addWidget(btnTrimStart);
+    trimLayout->addStretch();
+    trimLayout->addWidget(recordTimeTrim);
+    trimLayout->addStretch();
+    trimLayout->addWidget(btnTrimAccept);
+    trimLayout->addWidget(btnTrimDeny);
+
+    QVBoxLayout *rightDownLayout = new QVBoxLayout(trimBlock);
+    rightDownLayout->setContentsMargins(6, 6, 6, 6);
+    rightDownLayout->addWidget(trimPage);
+
 }
 
 void ConnectionPage::createLayouts() {
 
 // =================== LEFT SIDE
 
-    portSettingsLayout->addWidget(new QLabel("Switch port:"));
+    portSettingsLayout->addWidget(updatePortList);
+    portSettingsLayout->addStretch();
+    portSettingsLayout->addWidget(new QLabel("Select port:"));
     portSettingsLayout->addWidget(portList);
     portSettingsLayout->addWidget(new QLabel("  Switch baud rate:"));
     portSettingsLayout->addWidget(baudRate);
-    portSettingsLayout->addStretch();
-    portSettingsLayout->addWidget(updatePortList);
 
     opCloseLayout->addWidget(btnConnectPort);
     opCloseLayout->addWidget(btnClosePort);
@@ -227,18 +259,14 @@ void ConnectionPage::createLayouts() {
     settingsRightLeftArea->addLayout(settingSelectMovement);
     settingsRightLeftArea->addLayout(settingTypeMethod);
     settingsRightLeftArea->addLayout(settingDBName);
-    settingsRightLeftArea->addWidget(recordCheckBox);
 
-    settingsRightRightArea->addWidget(recordedDataGroup);
-
-    underGraphLayout->addLayout(settingsRightLeftArea);
-    underGraphLayout->addLayout(settingsRightRightArea);
-
-
-    rigthLayout->addLayout(underGraphLayout);
-    rigthLayout->addWidget(infoGroup);
+    rigthLayout->addLayout(rightUnderGraphLayout);
     rigthLayout->addStretch();
 
+    rightUnderGraphLayout->addLayout(settingsRightLeftArea, 0, 0);
+    rightUnderGraphLayout->addWidget(trimBlock, 0, 1);
+    rightUnderGraphLayout->addWidget(infoGroup, 1, 0);
+    rightUnderGraphLayout->addWidget(recordedDataGroup, 1, 1);
 
 // =================== SETUP PAGE
 
@@ -275,15 +303,25 @@ void ConnectionPage::connectSignals() {
             this,
             &ConnectionPage::clearAllGraphs);
 
-    connect(recordCheckBox,
-            &QCheckBox::toggled,
-            this,
-            &ConnectionPage::recordingToggled);
-
     connect(targetDbCombo,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
             this,
             [this](int) { emit targetDatabaseChanged(targetDbCombo->currentText()); });
+
+    connect(methodOfrecord,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this,
+            [this](int) { emit targetMethodChanged(methodOfrecord->currentText()); });
+
+    connect(motionType,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this,
+            [this](int index) {
+                MotionType type = static_cast<MotionType>(
+                    motionType->itemData(index).toInt()
+                );
+                emit targetMotionTypeChanged(type);
+            });
 
     connect(methodOfrecord,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -295,19 +333,35 @@ void ConnectionPage::connectSignals() {
                 btnPrevGesture->setEnabled(!isOnce);
                 btnNextGesture->setEnabled(!isOnce);
                 listIndexLabel->setVisible(!isOnce);
+
+                WorkMode mode = (index == 0) ? WorkMode::WORK_NONE
+                             : (index == 1) ? WorkMode::WORK_ONCE
+                                            : WorkMode::WORK_LIST;
+                setWorkMode(mode);
+
+                btnSaveOnce->setEnabled(false);
+                btnDiscardOnce->setEnabled(false);
+
+                btnTrimStart->setEnabled(isOnce);
+                resetTrim();
             });
 
     connect(btnSaveOnce,
             &QPushButton::clicked,
             this,
-            &ConnectionPage::saveOnceRequested);
+            &ConnectionPage::onSaveOnceClicked);
 
     connect(btnDiscardOnce,
             &QPushButton::clicked,
             this,
-            &ConnectionPage::discardOnceRequested);
+            [this]() {
+                emit discardOnceRequested();
+                btnSaveOnce->setEnabled(false);
+                btnDiscardOnce->setEnabled(false);
+                onceStatusLabel->setText("Buffer: 0 samples");
+                resetTrim();
+            });
 
-    // List mode navigation
     connect(btnPrevGesture,
             &QPushButton::clicked,
             this,
@@ -317,12 +371,55 @@ void ConnectionPage::connectSignals() {
             &QPushButton::clicked,
             this,
             &ConnectionPage::nextGestureRequested);
+
+    connect(btnTrimStart,
+            &QPushButton::clicked,
+            this,
+            &ConnectionPage::onTrimButtonClicked);
+
+    connect(btnTrimAccept,
+            &QPushButton::clicked,
+            this,
+            &ConnectionPage::onTrimAccept);
+
+    connect(btnTrimDeny,
+            &QPushButton::clicked,
+            this,
+            &ConnectionPage::onTrimDeny);
+
+    connect(accelGraph, &QCustomPlot::mousePress,
+            this, [this](QMouseEvent *e) { onGraphMousePress(e, accelGraph); });
+    connect(accelGraph, &QCustomPlot::mouseMove,
+            this, [this](QMouseEvent *e) { onGraphMouseMove(e, accelGraph); });
+    connect(accelGraph, &QCustomPlot::mouseRelease,
+            this, [this](QMouseEvent *e) { onGraphMouseRelease(e, accelGraph); });
+
+    connect(gyroGraph, &QCustomPlot::mousePress,
+            this, [this](QMouseEvent *e) { onGraphMousePress(e, gyroGraph); });
+    connect(gyroGraph, &QCustomPlot::mouseMove,
+            this, [this](QMouseEvent *e) { onGraphMouseMove(e, gyroGraph); });
+    connect(gyroGraph, &QCustomPlot::mouseRelease,
+            this, [this](QMouseEvent *e) { onGraphMouseRelease(e, gyroGraph); });
 }
 
 void ConnectionPage::drawSeparator() {
     addSeparator(liveDataPlot, tempTime);
     addSeparator(accelGraph, tempTime);
     addSeparator(gyroGraph, tempTime);
+}
+
+void ConnectionPage::drawSavedSegmentSeparators() {
+    if (motionSaved.isEmpty()) return;
+
+    double x0 = motionSaved.first().time / 1000000.0;
+    double x1 = motionSaved.last().time  / 1000000.0;
+
+    addSeparator(liveDataPlot, x0);
+    addSeparator(accelGraph,   x0);
+    addSeparator(gyroGraph,    x0);
+    addSeparator(liveDataPlot, x1);
+    addSeparator(accelGraph,   x1);
+    addSeparator(gyroGraph,    x1);
 }
 
 void ConnectionPage::addSeparator(QCustomPlot *plot, double x) {
@@ -347,37 +444,238 @@ void ConnectionPage::clearSeparators() {
     m_separatorLines.clear();
 }
 
-void ConnectionPage::updateStream(const MotionPacket &packet)
-{
-    updateTime(packet.sample.time);
+void ConnectionPage::addTrimLine(double sec, bool isStart) {
+    auto *lineA = new QCPItemStraightLine(accelGraph);
+    lineA->point1->setCoords(sec, 0);
+    lineA->point2->setCoords(sec, 1);
+    lineA->setPen(QPen(isStart ? Qt::green : Qt::red, 2, Qt::SolidLine));
 
-    if (packet.recording && !lastRecordingState) {
-        clearAccelGyroGraphs();
-        addSeparator(accelGraph, tempTime);
-        addSeparator(gyroGraph, tempTime);
-        timeStartSnaphots = tempTime;
-        resetCountSnapshots();
+    auto *lineG = new QCPItemStraightLine(gyroGraph);
+    lineG->point1->setCoords(sec, 0);
+    lineG->point2->setCoords(sec, 1);
+    lineG->setPen(QPen(isStart ? Qt::green : Qt::red, 2, Qt::SolidLine));
+
+    if (isStart) {
+        for (QCPItemStraightLine *l : m_trimLinesStart)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_trimLinesStart.clear();
+        m_trimLinesStart.append(lineA);
+        m_trimLinesStart.append(lineG);
+    } else {
+        for (QCPItemStraightLine *l : m_trimLinesEnd)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_trimLinesEnd.clear();
+        m_trimLinesEnd.append(lineA);
+        m_trimLinesEnd.append(lineG);
     }
-
-    updateliveDataPlotGraph(packet.sample);
-
-    if (packet.recording) {
-        updateAccelGraph(packet.sample);
-        updateGyroGraph(packet.sample);
-        snaphots++;
-    }
-
-    if (lastRecordingState && !packet.recording) {
-        addSeparator(accelGraph, tempTime);
-        addSeparator(gyroGraph, tempTime);
-        emit logMessage(LogLevel::Info, QString("%1 packages arrived. Time motion: %2 sec. Freq(Hz): %3").arg(snaphots).arg(tempTime - timeStartSnaphots).arg(( snaphots / (tempTime - timeStartSnaphots))));
-    }
-
-    lastRecordingState = packet.recording;
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void ConnectionPage::clearAccelGyroGraphs()
-{
+void ConnectionPage::updateTrimLine(double sec, bool isStart) {
+    const QVector<QCPItemStraightLine *> &vec = isStart ? m_trimLinesStart : m_trimLinesEnd;
+    for (QCPItemStraightLine *line : vec) {
+        line->point1->setCoords(sec, 0);
+        line->point2->setCoords(sec, 1);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void ConnectionPage::clearTrimSeparators() {
+
+    for (QCPItemStraightLine *line : m_trimLinesStart)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+
+    for (QCPItemStraightLine *line : m_trimLinesEnd)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+    m_trimLinesStart.clear();
+    m_trimLinesEnd.clear();
+
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void ConnectionPage::setTrimInteractionEnabled(bool on) {
+
+    if (on) {
+        accelGraph->setInteraction(QCP::iRangeDrag, false);
+        gyroGraph->setInteraction(QCP::iRangeDrag, false);
+    } else {
+        accelGraph->setInteraction(QCP::iRangeDrag, m_rangeDragAccel);
+        gyroGraph->setInteraction(QCP::iRangeDrag, m_rangeDragGyro);
+    }
+}
+
+void ConnectionPage::resetTrim() {
+    clearTrimSeparators();
+    m_trimStartSec = m_trimEndSec = -1;
+    m_trimState = TrimState::Off;
+    m_trimDragging = false;
+    btnTrimAccept->setEnabled(false);
+    btnTrimDeny->setEnabled(false);
+    setTrimInteractionEnabled(false);
+    if (recordTimeTrim) recordTimeTrim->setText("0 / 0");
+}
+
+double ConnectionPage::clampToData(double sec) const {
+    if (motionSaved.isEmpty()) return sec;
+    double first = motionSaved.first().time / 1000000.0;
+    double last  = motionSaved.last().time / 1000000.0;
+    return qBound(first, sec, last);
+}
+
+void ConnectionPage::onTrimButtonClicked() {
+    if (!btnTrimStart->isEnabled()) return;
+
+    if (m_trimState == TrimState::Off) {
+
+        m_rangeDragAccel = accelGraph->interactions().testFlag(QCP::iRangeDrag);
+        m_rangeDragGyro  = gyroGraph->interactions().testFlag(QCP::iRangeDrag);
+        clearTrimSeparators();
+        m_trimStartSec = m_trimEndSec = -1;
+        m_trimState = TrimState::AwaitStart;
+        btnTrimAccept->setEnabled(false);
+        btnTrimDeny->setEnabled(false);
+        setTrimInteractionEnabled(true);
+        if (recordTimeTrim) recordTimeTrim->setText("click start / -");
+    } else {
+
+        resetTrim();
+    }
+}
+
+void ConnectionPage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
+    if (m_trimState == TrimState::Off) return;
+
+    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()));
+
+    if (m_trimState == TrimState::AwaitStart) {
+        m_trimStartSec = sec;
+        addTrimLine(sec, true);
+        m_trimState = TrimState::AwaitEnd;
+        if (recordTimeTrim)
+            recordTimeTrim->setText(QString("%1 / -").arg(sec, 0, 'f', 3));
+    }
+    else if (m_trimState == TrimState::AwaitEnd) {
+        m_trimEndSec = sec;
+        addTrimLine(sec, false);
+        m_trimState = TrimState::Adjust;
+        btnTrimAccept->setEnabled(true);
+        btnTrimDeny->setEnabled(true);
+        if (recordTimeTrim)
+            recordTimeTrim->setText(QString("%1 / %2")
+                .arg(m_trimStartSec, 0, 'f', 3)
+                .arg(m_trimEndSec, 0, 'f', 3));
+    }
+    else if (m_trimState == TrimState::Adjust) {
+        const double px = event->pos().x();
+        if (m_trimStartSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_trimStartSec);
+            if (qAbs(linePx - px) <= TrimDragThresholdPx) {
+                m_trimDragging = true;
+                m_trimDragIsStart = true;
+                return;
+            }
+        }
+        if (m_trimEndSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_trimEndSec);
+            if (qAbs(linePx - px) <= TrimDragThresholdPx) {
+                m_trimDragging = true;
+                m_trimDragIsStart = false;
+            }
+        }
+    }
+}
+
+void ConnectionPage::onGraphMouseMove(QMouseEvent *event, QCustomPlot *plot) {
+    if (!m_trimDragging) return;
+    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()));
+    if (m_trimDragIsStart) m_trimStartSec = sec; else m_trimEndSec = sec;
+    updateTrimLine(sec, m_trimDragIsStart);
+    if (recordTimeTrim)
+        recordTimeTrim->setText(QString("%1 / %2")
+            .arg(m_trimStartSec, 0, 'f', 3)
+            .arg(m_trimEndSec, 0, 'f', 3));
+}
+
+void ConnectionPage::onGraphMouseRelease(QMouseEvent *event, QCustomPlot *plot) {
+    Q_UNUSED(event);
+    Q_UNUSED(plot);
+    m_trimDragging = false;
+}
+
+void ConnectionPage::onTrimAccept() {
+    if (m_trimStartSec < 0 || m_trimEndSec < 0) return;
+
+    double lo = (m_trimStartSec < m_trimEndSec) ? m_trimStartSec : m_trimEndSec;
+    double hi = (m_trimStartSec < m_trimEndSec) ? m_trimEndSec : m_trimStartSec;
+
+    if (!motionSaved.isEmpty()) {
+        QVector<MotionSample> trimmed;
+        for (const MotionSample &s : motionSaved) {
+            double t = s.time / 1000000.0;
+            if (t >= lo && t <= hi)
+                trimmed.append(s);
+        }
+        motionSaved = trimmed;
+        updateSavedGraph(motionSaved);
+        drawSavedSegmentSeparators();
+        onceStatusLabel->setText(QString("Buffer: %1 samples").arg(motionSaved.size()));
+        btnSaveOnce->setEnabled(!motionSaved.isEmpty());
+        btnDiscardOnce->setEnabled(!motionSaved.isEmpty());
+    }
+
+    emit trimRequested(lo, hi);
+
+    resetTrim();
+}
+
+void ConnectionPage::onTrimDeny() {
+    resetTrim();
+}
+
+void ConnectionPage::updateStream(const MotionPacket &packet) {
+
+    if (workMode == WorkMode::WORK_NONE || workMode == WorkMode::WORK_ONCE) {
+
+        updateTime(packet.sample.time);
+
+        if (packet.recording && !lastRecordingState) {
+            clearAccelGyroGraphs();
+            addSeparator(liveDataPlot, tempTime);
+            addSeparator(accelGraph, tempTime);
+            addSeparator(gyroGraph, tempTime);
+            timeStartSnaphots = tempTime;
+            resetCountSnapshots();
+
+            resetTrim();
+        }
+
+        updateliveDataPlotGraph(packet.sample);
+
+        if (packet.recording) {
+            updateAccelGraph(packet.sample);
+            updateGyroGraph(packet.sample);
+            snaphots++;
+        }
+
+        if (lastRecordingState && !packet.recording) {
+            addSeparator(liveDataPlot, tempTime);
+            addSeparator(accelGraph, tempTime);
+            addSeparator(gyroGraph, tempTime);
+
+            float lenght = tempTime - timeStartSnaphots;
+            float freq = snaphots / ( tempTime - timeStartSnaphots );
+
+            updateInfoBox( lenght, freq, snaphots );
+        }
+
+        lastRecordingState = packet.recording;
+    }
+}
+
+void ConnectionPage::clearAccelGyroGraphs() {
     for (int i = 0; i < 3; i++) {
         accelGraph->graph(i)->data()->clear();
         gyroGraph->graph(i)->data()->clear();
@@ -389,8 +687,7 @@ void ConnectionPage::clearAccelGyroGraphs()
     gyroGraph->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void ConnectionPage::clearAllGraphs()
-{
+void ConnectionPage::clearAllGraphs() {
     for (int i = 0; i < 3; i++) {
         accelGraph->graph(i)->data()->clear();
         gyroGraph->graph(i)->data()->clear();
@@ -405,23 +702,106 @@ void ConnectionPage::clearAllGraphs()
     liveDataPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void ConnectionPage::resetTime()
-{
+void ConnectionPage::resetTime() {
     tempTime = 0;
     deltaTime = 0;
 }
 
+void ConnectionPage::updateInfoBox(const float &infoLength,
+                                     const float &infoFreq,
+                                     const int infoSamples) {
 
-void ConnectionPage::setPorts(const QStringList &ports)
-{
+    emit logMessage(LogLevel::Info, QString("%1 packages arrived. Time motion: %2 sec. Freq(Hz): %3").arg(infoSamples).arg(infoLength).arg(infoFreq));
+    infoLengthLabel->setNum(infoLength);
+    infoFreqLabel->setNum(infoFreq);
+    infoSamplesLabel->setNum(infoSamples);
+}
+
+void ConnectionPage::updateSavedGraph(QVector<MotionSample> &motionSaved){
+
+    if (motionSaved.isEmpty()) {
+        return;
+    }
+
+    clearAllGraphs();
+    updateTime(motionSaved.at(0).time);
+    timeStartSnaphots = tempTime;
+
+    for ( const MotionSample &sample : motionSaved ) {
+        updateTime(sample.time);
+        updateGyroGraph(sample);
+        updateAccelGraph(sample);
+        updateliveDataPlotGraph(sample);
+    }
+
+    float lenght = tempTime - timeStartSnaphots;
+    float freq = motionSaved.size() / ( tempTime - timeStartSnaphots );
+    updateInfoBox(lenght, freq, motionSaved.size());
+}
+
+void ConnectionPage::incommingSegment(QVector<MotionSample> &receivedData) {
+    if (workMode == WorkMode::WORK_ONCE) {
+        if (receivedData.isEmpty()) {
+            return;
+        }
+        motionSaved = receivedData;
+        updateSavedGraph(receivedData);
+        drawSavedSegmentSeparators();
+
+        btnSaveOnce->setEnabled(true);
+        btnDiscardOnce->setEnabled(true);
+        onceStatusLabel->setText(QString("Buffer: %1 samples").arg(receivedData.size()));
+    }
+}
+
+void ConnectionPage::onSaveOnceClicked() {
+    if (motionSaved.isEmpty()) {
+        return;
+    }
+
+    const MotionSample &first = motionSaved.first();
+    const MotionSample &last  = motionSaved.last();
+    double duration = (last.time - first.time) / 1000000.0;
+    int sampleCount = motionSaved.size();
+
+    QString movement = motionType->currentText();
+    QString database = targetDbCombo->currentText();
+
+    QString msg = QString("Confirm saving gesture:\n\n"
+                          "Movement: %1\n"
+                          "Database: %2\n"
+                          "Time: %3 s\n"
+                          "Samples: %4")
+            .arg(movement)
+            .arg(database)
+            .arg(duration, 0, 'f', 3)
+            .arg(sampleCount);
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Save gesture",
+        msg,
+        QMessageBox::Save | QMessageBox::Cancel);
+
+    if (reply == QMessageBox::Save) {
+
+        emit saveOnceRequested();
+
+        motionSaved.clear();
+        btnSaveOnce->setEnabled(false);
+        btnDiscardOnce->setEnabled(false);
+        onceStatusLabel->setText("Saved");
+    }
+}
+
+void ConnectionPage::setPorts(const QStringList &ports) {
     portList->clear();
 
     for (const QString &port : ports)
         portList->addItem(port);
 }
 
-void ConnectionPage::setAvailableDatabases(const QStringList &databases)
-{
+void ConnectionPage::setAvailableDatabases(const QStringList &databases) {
     targetDbCombo->clear();
     targetDbCombo->addItems(databases);
 }
@@ -432,6 +812,15 @@ PortConfig ConnectionPage::connectTo()
     config.name = portList->currentText();
     config.baud = baudRate->currentText().toInt();
     return config;
+}
+
+void ConnectionPage::setWorkMode(WorkMode &mode)
+{
+    workMode = mode;
+}
+
+WorkMode ConnectionPage::getWorkMode() const {
+    return workMode;
 }
 
 void ConnectionPage::updateTime(const uint32_t t)
@@ -474,7 +863,7 @@ void ConnectionPage::updateliveDataPlotGraph(const MotionSample &sample)
 
     liveDataPlot->graph(0)->addData(deltaTime, totalAccel);
 
-    liveDataPlot->xAxis->setRange(deltaTime, 5, Qt::AlignCenter);
+    liveDataPlot->xAxis->setRange(deltaTime, 5, Qt::AlignRight);
     liveDataPlot->yAxis->rescale(true);
 
     liveDataPlot->replot(QCustomPlot::rpQueuedReplot);

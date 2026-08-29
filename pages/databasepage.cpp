@@ -15,7 +15,16 @@
 #include <QSplitter>
 #include <QLineEdit>
 #include <QTableView>
+#include <QHeaderView>
 #include <QSqlTableModel>
+#include <QSqlQuery>
+#include <QSqlRecord>
+#include <QSqlError>
+#include <QDebug>
+#include <QMouseEvent>
+#include <QPen>
+#include <QColor>
+#include <QItemSelectionModel>
 
 DataBasePage::DataBasePage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent)
@@ -68,8 +77,9 @@ void DataBasePage::createWidgets() {
     treeView->setModel(treeModel);
     treeView->setHeaderHidden(false);
 
-    treeView->resizeColumnToContents(0);
-    treeView->resizeColumnToContents(1);
+    treeView->header()->setSectionResizeMode(QHeaderView::Interactive);
+    treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    treeView->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
     parentItem = new QStandardItem();
     parentItem = treeModel->invisibleRootItem();
@@ -94,6 +104,10 @@ void DataBasePage::createWidgets() {
     areaBtnGraph = new QHBoxLayout();
 
     labelStatsChanged = new QLabel("Total added: %1");
+    motionTypeLegend = new QLabel();
+    motionTypeLegend->setStyleSheet("font-family: monospace; font-size: 10px; color: #666;");
+    motionTypeLegend->setWordWrap(true);
+    updateMotionTypeLegend();
 
     samplesAreaRight = new QVBoxLayout();
 
@@ -108,6 +122,7 @@ void DataBasePage::createWidgets() {
     samplesView->horizontalHeader()->setStretchLastSection(true);
     samplesView->verticalHeader()->setVisible(false);
     samplesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    samplesView->setAlternatingRowColors(true);
 
     motionDataView = new QTableView();
     motionDataView->setModel(motionDataModel);
@@ -130,6 +145,17 @@ void DataBasePage::createWidgets() {
     btnSetPath = new QPushButton("Set path");
     btnNextSample = new QPushButton("Next sample");
     btnUndoSample = new QPushButton("Undo sample");
+    btnAddSelected = new QPushButton("Add selected");
+    btnExtractSelected = new QPushButton("Extract selected");
+    btnTrimAccept = new QPushButton("Accept");
+    btnTrimDeny = new QPushButton("Deny");
+
+    btnTrimAccept->setFixedWidth(80);
+    btnTrimDeny->setFixedWidth(80);
+    btnTrimAccept->setEnabled(false);
+    btnTrimDeny->setEnabled(false);
+    btnUndoSample->setEnabled(false);
+    btnNextSample->setEnabled(false);
 
     gyroGraph->xAxis->setLabel("Time (s)");
     gyroGraph->yAxis->setLabel("Gyro (°/с)");
@@ -188,9 +214,18 @@ void DataBasePage::createLayouts() {
 
     areaBtnGraph->addWidget(btnRefreshGraph);
     areaBtnGraph->addWidget(btnCutGraph);
+    areaBtnGraph->addWidget(motionTypeLegend);
+    areaBtnGraph->addWidget(btnTrimAccept);
+    areaBtnGraph->addWidget(btnTrimDeny);
     areaBtnGraph->addStretch();
+
     areaBtnGraph->addWidget(btnUndoSample);
     areaBtnGraph->addWidget(btnNextSample);
+    areaBtnGraph->addStretch();
+    areaBtnGraph->addWidget(btnAddSelected);
+    areaBtnGraph->addWidget(btnExtractSelected);
+
+
 
     rigthLayout->addLayout(pathArea);
     rigthLayout->addLayout(samplesArea);
@@ -257,6 +292,55 @@ void DataBasePage::connectSignals() {
                     }
                 }
     });
+
+    connect(btnNextSample, &QPushButton::clicked, this, [this]() { navigateSample(1); });
+    connect(btnUndoSample, &QPushButton::clicked, this, [this]() { navigateSample(-1); });
+
+    connect(btnAddSelected, &QPushButton::clicked, this, &DataBasePage::onAddSelectedClicked);
+    connect(btnExtractSelected, &QPushButton::clicked, this, &DataBasePage::onExtractSelectedClicked);
+    connect(btnDeleteFromDataSet, &QPushButton::clicked, this, &DataBasePage::onDeleteFromDataSetClicked);
+
+    connect(btnCutGraph, &QPushButton::clicked, this, &DataBasePage::onTrimButtonClicked);
+    connect(btnTrimAccept, &QPushButton::clicked, this, &DataBasePage::onTrimAccept);
+    connect(btnTrimDeny, &QPushButton::clicked, this, &DataBasePage::onTrimDeny);
+
+    connect(accelGraph, &QCustomPlot::mousePress,
+            this, [this](QMouseEvent *e) { onGraphMousePress(e, accelGraph); });
+    connect(accelGraph, &QCustomPlot::mouseMove,
+            this, [this](QMouseEvent *e) { onGraphMouseMove(e, accelGraph); });
+    connect(accelGraph, &QCustomPlot::mouseRelease,
+            this, [this](QMouseEvent *e) { onGraphMouseRelease(e, accelGraph); });
+
+    connect(gyroGraph, &QCustomPlot::mousePress,
+            this, [this](QMouseEvent *e) { onGraphMousePress(e, gyroGraph); });
+    connect(gyroGraph, &QCustomPlot::mouseMove,
+            this, [this](QMouseEvent *e) { onGraphMouseMove(e, gyroGraph); });
+    connect(gyroGraph, &QCustomPlot::mouseRelease,
+            this, [this](QMouseEvent *e) { onGraphMouseRelease(e, gyroGraph); });
+
+    connectSampleSelectionHandler();
+}
+
+void DataBasePage::connectSampleSelectionHandler() {
+    QItemSelectionModel *selection = samplesView->selectionModel();
+    if (!selection) return;
+    connect(selection, &QItemSelectionModel::selectionChanged,
+            this, &DataBasePage::onSamplesSelectionChanged);
+}
+
+void DataBasePage::onSamplesSelectionChanged(const QItemSelection &selected) {
+    updateSelectedHighlight();
+    updateNavigationButtons();
+
+    if (selected.indexes().isEmpty()) return;
+
+    QModelIndex index = selected.indexes().first();
+    if (!index.isValid()) return;
+
+    int row = index.row();
+    m_currentSampleRow = row;
+    int sampleId = samplesModel->data(samplesModel->index(row, 0)).toInt();
+    loadSampleToGraphs(sampleId);
 }
 
 void DataBasePage::openDBDialog()
@@ -314,66 +398,39 @@ void DataBasePage::refreshDatabaseList() {
     QStringList databases = m_dbManager->getRegisteredDatabases();
 
     for (const QString &dbName : databases) {
-        QList<QStandardItem*> rowItems;
-
         QStandardItem *dbNameItem = new QStandardItem(dbName);
-        rowItems.append(dbNameItem);
 
-        QStandardItem *countItem = new QStandardItem("0");
-        rowItems.append(countItem);
+        QStandardItem *countItem = new QStandardItem();
+        countItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-        treeModel->appendRow(rowItems);
+        treeModel->appendRow({dbNameItem, countItem});
 
         QStringList tableNames = m_dbManager->getTableNames(dbName);
 
+        int totalCount = 0;
         for (const QString &table : tableNames) {
-            QList<QStandardItem*> tableRowItems;
-
             QStandardItem *tableItem = new QStandardItem(table);
-            tableRowItems.append(tableItem);
 
-            tableRowItems.append(new QStandardItem(""));
+            QStandardItem *tableCountItem = new QStandardItem();
+            tableCountItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
             int rowCount = m_dbManager->getTableRowCount(dbName, table);
-            tableRowItems.append(new QStandardItem(QString::number(rowCount)));
+            totalCount += rowCount;
 
-            dbNameItem->appendRow(tableRowItems);
+            tableCountItem->setText(QString::number(rowCount));
+            dbNameItem->appendRow({tableItem, tableCountItem});
 
             QStringList columnsInTable = m_dbManager->getTableRowsNames(dbName, table);
 
             for (const QString &column : columnsInTable) {
-                QList<QStandardItem*> columnRowItems;
-                columnRowItems.append(new QStandardItem(column));
-                columnRowItems.append(new QStandardItem(""));
-
-                tableItem->appendRow(columnRowItems);
+                QStandardItem *columnItem = new QStandardItem(column);
+                QStandardItem *blankItem = new QStandardItem("");
+                tableItem->appendRow({columnItem, blankItem});
             }
         }
 
-        int totalCount = 0;
-        for (const QString &table : tableNames) {
-            totalCount += m_dbManager->getTableRowCount(dbName, table);
-        }
         countItem->setText(QString::number(totalCount));
     }
-}
-
-void DataBasePage::refreshSamplesModel(const QString &dbName, const QString &selectTable) {
-
-    samplesView->reset();
-
-    samplesModel = new QSqlTableModel(this, m_dbManager->getDatabase(dbName));
-    samplesModel->setTable("samples");
-    samplesModel->setEditStrategy(QSqlTableModel::OnManualSubmit);
-    samplesModel->select();
-
-    motionDataModel = new QSqlTableModel(this, m_dbManager->getDatabase(dbName));
-    motionDataModel->setTable("motion_data");
-    motionDataModel->setEditStrategy(QSqlTableModel::OnRowChange);
-    motionDataModel->select();
-
-    motionDataView->setModel(motionDataModel);
-    samplesView->setModel(samplesModel);
 }
 
 void DataBasePage::onTreeViewDoubleClicked(const QModelIndex &index) {
@@ -391,4 +448,528 @@ void DataBasePage::onTreeViewDoubleClicked(const QModelIndex &index) {
     QString dbName = dbItem->text();
     QString tableName = itemText;
     refreshSamplesModel(dbName, tableName);
+}
+
+void DataBasePage::refreshSamplesModel(const QString &dbName, const QString &) {
+
+    if (dbName.isEmpty()) return;
+
+    m_currentDatabase = dbName;
+
+    samplesView->reset();
+
+    samplesModel = new QSqlTableModel(this, m_dbManager->getDatabase(dbName));
+    samplesModel->setTable("samples");
+    samplesModel->setEditStrategy(QSqlTableModel::OnManualSubmit);
+    samplesModel->select();
+
+    motionDataModel = new QSqlTableModel(this, m_dbManager->getDatabase(dbName));
+    motionDataModel->setTable("motion_data");
+    motionDataModel->setEditStrategy(QSqlTableModel::OnRowChange);
+    motionDataModel->select();
+
+    motionDataView->setModel(motionDataModel);
+    samplesView->setModel(samplesModel);
+    connectSampleSelectionHandler();
+
+    m_currentSampleRow = -1;
+    m_selectedList.clear();
+    updateStatsLabel();
+    updateNavigationButtons();
+    updateMotionTypeLegend();
+}
+
+void DataBasePage::loadSampleToGraphs(int sampleId) {
+    QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
+    if (!db.isOpen()) return;
+
+    QSqlQuery query(db);
+    query.prepare("SELECT sample_index, ax, ay, az, gx, gy, gz, timestamp FROM motion_data "
+                  "WHERE sample_id = :sample_id ORDER BY sample_index");
+    query.bindValue(":sample_id", sampleId);
+
+    if (!query.exec()) {
+        qDebug() << "Failed to load motion data:" << query.lastError().text();
+        return;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        accelGraph->graph(i)->data()->clear();
+        gyroGraph->graph(i)->data()->clear();
+    }
+
+    double firstTime = 0;
+    bool first = true;
+    int count = 0;
+    double relTime = 0;
+
+    while (query.next()) {
+        double timeSec = query.value("timestamp").toLongLong() / 1000000.0;
+        if (first) {
+            firstTime = timeSec;
+            first = false;
+        }
+        relTime = timeSec - firstTime;
+
+        double ax = query.value("ax").toDouble();
+        double ay = query.value("ay").toDouble();
+        double az = query.value("az").toDouble();
+        double gx = query.value("gx").toDouble();
+        double gy = query.value("gy").toDouble();
+        double gz = query.value("gz").toDouble();
+
+        accelGraph->graph(0)->addData(relTime, ax);
+        accelGraph->graph(1)->addData(relTime, ay);
+        accelGraph->graph(2)->addData(relTime, az);
+
+        gyroGraph->graph(0)->addData(relTime, gx);
+        gyroGraph->graph(1)->addData(relTime, gy);
+        gyroGraph->graph(2)->addData(relTime, gz);
+
+        count++;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        accelGraph->graph(i)->rescaleAxes(true);
+        gyroGraph->graph(i)->rescaleAxes(true);
+    }
+
+    //accelGraph->xAxis->setRange(0, count > 0 ? (relTime > 0 ? relTime : 5) : 5);
+    //gyroGraph->xAxis->setRange(0, count > 0 ? (relTime > 0 ? relTime : 5) : 5);
+
+    accelGraph->xAxis->setRange(0, relTime );
+    gyroGraph->xAxis->setRange(0, relTime);
+
+    accelGraph->yAxis->rescale(true);
+    gyroGraph->yAxis->rescale(true);
+
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+
+    QSqlQuery typeQuery(db);
+    typeQuery.prepare("SELECT motion_type FROM samples WHERE id = :id");
+    typeQuery.bindValue(":id", sampleId);
+    if (typeQuery.exec() && typeQuery.next()) {
+        int motionTypeId = typeQuery.value(0).toInt();
+        updateMotionTypeLegend(motionTypeId);
+    }
+}
+
+void DataBasePage::navigateSample(int delta) {
+    if (!samplesModel || samplesModel->rowCount() == 0) return;
+
+    int newRow = m_currentSampleRow + delta;
+    if (newRow < 0) newRow = 0;
+    if (newRow >= samplesModel->rowCount()) newRow = samplesModel->rowCount() - 1;
+
+    if (newRow == m_currentSampleRow) return;
+
+    m_currentSampleRow = newRow;
+
+    QModelIndex index = samplesModel->index(m_currentSampleRow, 0);
+    samplesView->selectRow(m_currentSampleRow);
+    samplesView->setCurrentIndex(index);
+    samplesView->scrollTo(index, QAbstractItemView::PositionAtCenter);
+
+    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
+    loadSampleToGraphs(sampleId);
+
+    updateNavigationButtons();
+}
+
+void DataBasePage::updateNavigationButtons() {
+    int rowCount = samplesModel ? samplesModel->rowCount() : 0;
+    bool hasSelection = samplesView->selectionModel() && samplesView->selectionModel()->hasSelection();
+    bool hasCurrent = m_currentSampleRow >= 0 && m_currentSampleRow < rowCount;
+    
+    btnUndoSample->setEnabled(hasCurrent && m_currentSampleRow > 0);
+    btnNextSample->setEnabled(hasCurrent && m_currentSampleRow < rowCount - 1);
+    
+    if (hasSelection && !hasCurrent) {
+        QModelIndexList selected = samplesView->selectionModel()->selectedRows();
+        if (!selected.isEmpty()) {
+            int row = selected.first().row();
+            btnUndoSample->setEnabled(row > 0);
+            btnNextSample->setEnabled(row < rowCount - 1);
+        }
+    }
+}
+
+void DataBasePage::onTrimButtonClicked() {
+    if (m_currentSampleRow < 0) {
+        QMessageBox::warning(this, "No Sample", "Select a sample first.");
+        return;
+    }
+
+    if (m_trimState == TrimState::Off) {
+        m_rangeDragAccel = accelGraph->interactions().testFlag(QCP::iRangeDrag);
+        m_rangeDragGyro = gyroGraph->interactions().testFlag(QCP::iRangeDrag);
+        clearTrimSeparators();
+        m_trimStartSec = m_trimEndSec = -1;
+        m_trimState = TrimState::AwaitStart;
+        btnTrimAccept->setEnabled(false);
+        btnTrimDeny->setEnabled(false);
+        btnCutGraph->setText("Cancel Trim");
+        setTrimInteractionEnabled(true);
+    } else {
+        resetTrim();
+        btnCutGraph->setText("Cut");
+    }
+}
+
+void DataBasePage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
+    if (m_trimState == TrimState::Off) return;
+
+    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
+    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()), sampleId);
+
+    if (m_trimState == TrimState::AwaitStart) {
+        m_trimStartSec = sec;
+        addTrimLine(sec, true);
+        m_trimState = TrimState::AwaitEnd;
+    }
+    else if (m_trimState == TrimState::AwaitEnd) {
+        m_trimEndSec = sec;
+        addTrimLine(sec, false);
+        m_trimState = TrimState::Adjust;
+        btnTrimAccept->setEnabled(true);
+        btnTrimDeny->setEnabled(true);
+    }
+    else if (m_trimState == TrimState::Adjust) {
+        const double px = event->pos().x();
+        if (m_trimStartSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_trimStartSec);
+            if (qAbs(linePx - px) <= TrimDragThresholdPx) {
+                m_trimDragging = true;
+                m_trimDragIsStart = true;
+                return;
+            }
+        }
+        if (m_trimEndSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_trimEndSec);
+            if (qAbs(linePx - px) <= TrimDragThresholdPx) {
+                m_trimDragging = true;
+                m_trimDragIsStart = false;
+                return;
+            }
+        }
+    }
+}
+
+void DataBasePage::onGraphMouseMove(QMouseEvent *event, QCustomPlot *plot) {
+    if (!m_trimDragging) return;
+
+    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
+    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()), sampleId);
+
+    if (m_trimDragIsStart) {
+        m_trimStartSec = sec;
+    } else {
+        m_trimEndSec = sec;
+    }
+    updateTrimLine(sec, m_trimDragIsStart);
+}
+
+void DataBasePage::onGraphMouseRelease(QMouseEvent *event, QCustomPlot *plot) {
+    Q_UNUSED(event);
+    Q_UNUSED(plot);
+    m_trimDragging = false;
+}
+
+void DataBasePage::addTrimLine(double sec, bool isStart) {
+    auto *lineA = new QCPItemStraightLine(accelGraph);
+    lineA->point1->setCoords(sec, 0);
+    lineA->point2->setCoords(sec, 1);
+    lineA->setPen(QPen(isStart ? Qt::green : Qt::red, 2, Qt::SolidLine));
+
+    auto *lineG = new QCPItemStraightLine(gyroGraph);
+    lineG->point1->setCoords(sec, 0);
+    lineG->point2->setCoords(sec, 1);
+    lineG->setPen(QPen(isStart ? Qt::green : Qt::red, 2, Qt::SolidLine));
+
+    if (isStart) {
+        for (QCPItemStraightLine *l : m_trimLinesStart)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_trimLinesStart.clear();
+        m_trimLinesStart.append(lineA);
+        m_trimLinesStart.append(lineG);
+    } else {
+        for (QCPItemStraightLine *l : m_trimLinesEnd)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_trimLinesEnd.clear();
+        m_trimLinesEnd.append(lineA);
+        m_trimLinesEnd.append(lineG);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void DataBasePage::updateTrimLine(double sec, bool isStart) {
+    const QVector<QCPItemStraightLine *> &vec = isStart ? m_trimLinesStart : m_trimLinesEnd;
+    for (QCPItemStraightLine *line : vec) {
+        line->point1->setCoords(sec, 0);
+        line->point2->setCoords(sec, 1);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void DataBasePage::clearTrimSeparators() {
+    for (QCPItemStraightLine *line : m_trimLinesStart)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+    for (QCPItemStraightLine *line : m_trimLinesEnd)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+    m_trimLinesStart.clear();
+    m_trimLinesEnd.clear();
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void DataBasePage::setTrimInteractionEnabled(bool on) {
+    if (on) {
+        accelGraph->setInteraction(QCP::iRangeDrag, false);
+        gyroGraph->setInteraction(QCP::iRangeDrag, false);
+    } else {
+        accelGraph->setInteraction(QCP::iRangeDrag, m_rangeDragAccel);
+        gyroGraph->setInteraction(QCP::iRangeDrag, m_rangeDragGyro);
+    }
+}
+
+void DataBasePage::resetTrim() {
+    clearTrimSeparators();
+    m_trimStartSec = m_trimEndSec = -1;
+    m_trimState = TrimState::Off;
+    m_trimDragging = false;
+    btnTrimAccept->setEnabled(false);
+    btnTrimDeny->setEnabled(false);
+    btnCutGraph->setText("Cut");
+    setTrimInteractionEnabled(false);
+}
+
+double DataBasePage::clampToData(double sec, int sampleId) const {
+    QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
+    if (!db.isOpen()) return sec;
+
+    QSqlQuery query(db);
+    query.prepare("SELECT MIN(timestamp), MAX(timestamp) FROM motion_data WHERE sample_id = :id");
+    query.bindValue(":id", sampleId);
+    if (!query.exec() || !query.next()) return sec;
+
+    double first = query.value(0).toLongLong() / 1000000.0;
+    double last = query.value(1).toLongLong() / 1000000.0;
+    return qBound(0.0, sec, last - first);
+}
+
+void DataBasePage::onTrimAccept() {
+    if (m_trimStartSec < 0 || m_trimEndSec < 0 || m_currentSampleRow < 0) return;
+
+    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
+
+    double lo = qMin(m_trimStartSec, m_trimEndSec);
+    double hi = qMax(m_trimStartSec, m_trimEndSec);
+
+    applyTrimToDatabase(sampleId, lo, hi);
+
+    loadSampleToGraphs(sampleId);
+
+    resetTrim();
+}
+
+void DataBasePage::onTrimDeny() {
+    resetTrim();
+}
+
+void DataBasePage::applyTrimToDatabase(int sampleId, double loSec, double hiSec) {
+    QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
+    if (!db.isOpen()) return;
+
+    if (!db.transaction()) {
+        QMessageBox::warning(this, "Error", "Failed to start transaction.");
+        return;
+    }
+
+    QSqlQuery query(db);
+
+    QSqlQuery timeQuery(db);
+    timeQuery.prepare("SELECT MIN(timestamp) FROM motion_data WHERE sample_id = :id");
+    timeQuery.bindValue(":id", sampleId);
+    if (!timeQuery.exec() || !timeQuery.next()) {
+        db.rollback();
+        QMessageBox::warning(this, "Error", "Failed to read timestamps.");
+        return;
+    }
+    const double firstTimeUs = timeQuery.value(0).toDouble();
+
+    query.prepare("DELETE FROM motion_data WHERE sample_id = :id AND (timestamp < :lo OR timestamp > :hi)");
+    query.bindValue(":id", sampleId);
+    query.bindValue(":lo", qint64(firstTimeUs + loSec * 1000000.0));
+    query.bindValue(":hi", qint64(firstTimeUs + hiSec * 1000000.0));
+
+    if (!query.exec()) {
+        db.rollback();
+        QMessageBox::warning(this, "Error", "Failed to trim motion data: " + query.lastError().text());
+        return;
+    }
+
+    query.prepare("UPDATE samples SET sample_count = (SELECT COUNT(*) FROM motion_data WHERE sample_id = :id) WHERE id = :id");
+    query.bindValue(":id", sampleId);
+
+    if (!query.exec()) {
+        db.rollback();
+        QMessageBox::warning(this, "Error", "Failed to update sample count: " + query.lastError().text());
+        return;
+    }
+
+    if (!db.commit()) {
+        QMessageBox::warning(this, "Error", "Failed to commit: " + db.lastError().text());
+        return;
+    }
+
+    samplesModel->select();
+    QMessageBox::information(this, "Success", "Sample trimmed successfully.");
+}
+
+void DataBasePage::onAddSelectedClicked() {
+    QItemSelectionModel *selection = samplesView->selectionModel();
+    if (!selection || !selection->hasSelection()) {
+        QMessageBox::information(this, "No Selection", "Select samples in the table first.");
+        return;
+    }
+
+    QModelIndexList selectedRows = selection->selectedRows();
+    int added = 0;
+    for (const QModelIndex &index : selectedRows) {
+        int sampleId = samplesModel->data(samplesModel->index(index.row(), 0)).toInt();
+        if (!m_selectedList.contains(sampleId)) {
+            m_selectedList.append(sampleId);
+            added++;
+        }
+    }
+
+    updateSelectedHighlight();
+    updateStatsLabel();
+    QMessageBox::information(this, "Added", QString("Added %1 samples to selection list. Total: %2").arg(added).arg(m_selectedList.size()));
+}
+
+void DataBasePage::onExtractSelectedClicked() {
+    if (m_selectedList.isEmpty()) {
+        QMessageBox::information(this, "Empty List", "No samples in selection list.");
+        return;
+    }
+
+    QString msg = "Selected samples (" + QString::number(m_selectedList.size()) + "):\n";
+    for (int id : m_selectedList) {
+        msg += "  ID: " + QString::number(id) + "\n";
+    }
+    QMessageBox::information(this, "Extract Selected", msg);
+
+    m_selectedList.clear();
+    updateSelectedHighlight();
+    updateStatsLabel();
+}
+
+void DataBasePage::onDeleteFromDataSetClicked() {
+    if (!samplesModel || m_currentSampleRow < 0
+        || m_currentSampleRow >= samplesModel->rowCount()) {
+        QMessageBox::warning(this, "No Sample", "Select a sample first.");
+        return;
+    }
+
+    QModelIndex idx = samplesModel->index(m_currentSampleRow, 0);
+    if (!idx.isValid()) {
+        QMessageBox::warning(this, "No Sample", "Select a sample first.");
+        return;
+    }
+
+    int sampleId = samplesModel->data(idx).toInt();
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Delete Sample",
+        QString("Delete sample #%1 and its motion data?").arg(sampleId),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
+    if (!db.isOpen()) return;
+
+    if (!db.transaction()) {
+        QMessageBox::warning(this, "Error", "Failed to start transaction.");
+        return;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("DELETE FROM motion_data WHERE sample_id = :id");
+    query.bindValue(":id", sampleId);
+    if (!query.exec()) {
+        db.rollback();
+        QMessageBox::warning(this, "Error", "Failed to delete motion data: " + query.lastError().text());
+        return;
+    }
+
+    query.prepare("DELETE FROM samples WHERE id = :id");
+    query.bindValue(":id", sampleId);
+    if (!query.exec()) {
+        db.rollback();
+        QMessageBox::warning(this, "Error", "Failed to delete sample: " + query.lastError().text());
+        return;
+    }
+
+    if (!db.commit()) {
+        QMessageBox::warning(this, "Error", "Failed to commit: " + db.lastError().text());
+        return;
+    }
+
+    m_selectedList.removeAll(sampleId);
+
+    resetTrim();
+    for (int i = 0; i < 3; i++) {
+        accelGraph->graph(i)->data()->clear();
+        gyroGraph->graph(i)->data()->clear();
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+
+    samplesModel->select();
+    motionDataModel->select();
+    m_currentSampleRow = -1;
+    updateStatsLabel();
+    updateNavigationButtons();
+    updateMotionTypeLegend();
+}
+
+void DataBasePage::updateStatsLabel() {
+    labelStatsChanged->setText(QString("Total added: %1").arg(m_selectedList.size()));
+}
+
+void DataBasePage::updateSelectedHighlight() {
+    // Force view to repaint to show selection highlight
+    samplesView->viewport()->update();
+}
+
+QString DataBasePage::motionTypeToString(int motionTypeId) const {
+    const MotionType type = static_cast<MotionType>(motionTypeId);
+    switch (type) {
+        case MotionType::DoubleTap:          return "DoubleTap";
+        case MotionType::SwipeLeft:          return "SwipeLeft";
+        case MotionType::SwipeRight:         return "SwipeRight";
+        case MotionType::SwipeUp:            return "SwipeUp";
+        case MotionType::SwipeDown:          return "SwipeDown";
+        case MotionType::CircleCW:           return "CircleCW";
+        case MotionType::CircleCCW:          return "CircleCCW";
+        case MotionType::Shake:              return "Shake";
+        case MotionType::NormalHandMovement: return "NormalHandMovement";
+        case MotionType::Walking:            return "Walking";
+        case MotionType::Unlabeled:          return "Unlabeled";
+        case MotionType::Unknown:            return "Unknown";
+        default:                             return "Invalid";
+    }
+}
+
+void DataBasePage::updateMotionTypeLegend(int highlightId) {
+    if (highlightId >= 0) {
+        QString name = motionTypeToString(highlightId);
+        motionTypeLegend->setText(QString("Motion Type: %1 (%2)").arg(name).arg(highlightId));
+    } else {
+        motionTypeLegend->setText("Motion Type: -");
+    }
 }

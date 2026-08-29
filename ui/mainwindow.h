@@ -41,7 +41,7 @@ private:
     DataBasePage *datasetPage;
     SerialPort *serialPort;
     DatabaseManager *dataBaseManager;
-    MotionRecorder *m_motionRecorder = nullptr;
+    MotionRecorder *motionRecorder = nullptr;
 
     QWidget *livePage;
     QWidget *sessionPage;

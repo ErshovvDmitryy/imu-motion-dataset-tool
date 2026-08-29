@@ -4,6 +4,8 @@
 #include <QVBoxLayout>
 #include <QStackedWidget>
 
+#include <QDebug>
+
 #include "widgets/leftmenuwidget.h"
 #include "widgets/consolewidget.h"
 #include "widgets/statusbarwidget.h"
@@ -19,7 +21,7 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    delete m_motionRecorder;
+    delete motionRecorder;
     serialPort->~SerialPort();
     dataBaseManager->~DatabaseManager();
 }
@@ -42,7 +44,7 @@ void MainWindow::createWidgets() {
 
     connectionPage = new ConnectionPage;
 
-    m_motionRecorder = new MotionRecorder(dataBaseManager);
+    motionRecorder = new MotionRecorder(dataBaseManager);
 
     datasetPage = new DataBasePage(dataBaseManager);
 
@@ -56,8 +58,7 @@ void MainWindow::createWidgets() {
     stack->addWidget(datasetPage);
 }
 
-void MainWindow::createLayouts()
-{
+void MainWindow::createLayouts() {
     auto *mainLayout = new QHBoxLayout(centralWidget);
 
     auto *rightLayout = new QVBoxLayout;
@@ -118,27 +119,49 @@ void MainWindow::connectSignals() {
 
     connect(serialPort,
             &SerialPort::motionPacketReceived,
-            m_motionRecorder,
+            motionRecorder,
             &MotionRecorder::onSample);
 
-    /*connect(serialPort,
+    connect(serialPort,
             &SerialPort::segmentEndReceived,
-            m_motionRecorder,
-            &MotionRecorder::onSegmentEnd);*/
-
-    connect(connectionPage,
-            &ConnectionPage::recordingToggled,
-            m_motionRecorder,
-            &MotionRecorder::setRecording);
+            motionRecorder,
+            &MotionRecorder::onSegmentEnd);
 
     connect(connectionPage,
             &ConnectionPage::targetDatabaseChanged,
-            m_motionRecorder,
+            motionRecorder,
             &MotionRecorder::setTargetDatabase);
+
+    connect(connectionPage,
+            &ConnectionPage::targetMethodChanged,
+            motionRecorder,
+            &MotionRecorder::setMethodSaves);
+
+    connect(connectionPage,
+            &ConnectionPage::targetMotionTypeChanged,
+            motionRecorder,
+            &MotionRecorder::setMotionType);
+
+    connect(connectionPage,
+            &ConnectionPage::saveOnceRequested,
+            motionRecorder,
+            &MotionRecorder::requestSaveGesture);
+
+    connect(connectionPage,
+            &ConnectionPage::discardOnceRequested,
+            motionRecorder,
+            &MotionRecorder::clearBuffer);
+
+    connect(connectionPage,
+            &ConnectionPage::trimRequested,
+            motionRecorder,
+            &MotionRecorder::trimBuffer);
+
 
     auto refreshDatabases = [this]() {
         connectionPage->setAvailableDatabases(dataBaseManager->getRegisteredDatabases());
     };
+
     connect(dataBaseManager,
             &DatabaseManager::databaseRegistered,
             this,
@@ -193,6 +216,15 @@ void MainWindow::connectSignals() {
             &ConnectionPage::logMessage,
             console,
             &ConsoleWidget::logMessage);
+
+    connect(motionRecorder,
+            &MotionRecorder::logMessage,
+            console,
+            &ConsoleWidget::logMessage);
+    connect(motionRecorder,
+            &MotionRecorder::sampleIsReady,
+            connectionPage,
+            &ConnectionPage::incommingSegment);
 
     connect(dataBaseManager,
             &DatabaseManager::logMessage,

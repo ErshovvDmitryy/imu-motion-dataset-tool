@@ -17,12 +17,19 @@ class QVBoxLayout;
 class QHBoxLayout;
 class QComboBox;
 class QSplitter;
-class QCheckBox;
 class QCustomPlot;
 class QCPItemStraightLine;
+class QMouseEvent;
 class QLabel;
 class QGroupBox;
 class QStackedWidget;
+class QGridLayout;
+
+enum class WorkMode : int {
+    WORK_NONE = 1,
+    WORK_ONCE,
+    WORK_LIST
+};
 
 class ConnectionPage : public QWidget
 {
@@ -32,12 +39,20 @@ public:
     explicit ConnectionPage(QWidget *parent = nullptr);
 
     void drawSeparator();
+    void drawSavedSegmentSeparators();
     void updateStream(const MotionPacket &packet);
     void setPorts(const QStringList &ports);
     void setAvailableDatabases(const QStringList &databases);
+
+    void incommingSegment(QVector<MotionSample> &receivedData);
+
     PortConfig connectTo();
 
+    void setWorkMode(WorkMode &mode);
+    WorkMode getWorkMode() const;
+
 private:
+
     void createWidgets();
     void createLayouts();
     void connectSignals();
@@ -54,6 +69,26 @@ private:
     void clearSeparators();
     void resetTime();
 
+    void updateInfoBox(const float &infoLength, const float &infoFreqLabel, const int infoSamplesLabel);
+    void updateSavedGraph(QVector<MotionSample> &motionSaved);
+
+    void onSaveOnceClicked();
+
+    enum class TrimState { Off, AwaitStart, AwaitEnd, Adjust };
+
+    void onTrimButtonClicked();
+    void onTrimAccept();
+    void onTrimDeny();
+    void onGraphMousePress(QMouseEvent *event, QCustomPlot *plot);
+    void onGraphMouseMove(QMouseEvent *event, QCustomPlot *plot);
+    void onGraphMouseRelease(QMouseEvent *event, QCustomPlot *plot);
+    void addTrimLine(double sec, bool isStart);
+    void updateTrimLine(double sec, bool isStart);
+    void clearTrimSeparators();
+    void resetTrim();
+    void setTrimInteractionEnabled(bool on);
+    double clampToData(double sec) const;
+
     QWidget *leftWidget;
     QWidget *rightWidget;
 
@@ -62,6 +97,8 @@ private:
     QHBoxLayout *mainLayout;
     QVBoxLayout *leftLayout;
     QVBoxLayout *rigthLayout;
+
+    QGridLayout *rightUnderGraphLayout;
 
 // =================== LEFT SIDE
 
@@ -78,10 +115,9 @@ private:
     QPushButton *btnClosePort;
     QPushButton *updatePortList;
 
-    QCheckBox *recordCheckBox;
     QComboBox *targetDbCombo;
 
-// =================== RECORDED DATA (right, under recordCheckBox)
+// =================== RECORDED DATA
 
     QGroupBox   *recordedDataGroup;
     QStackedWidget *recordedDataStack;
@@ -96,14 +132,34 @@ private:
     QPushButton *btnNextGesture;
     QLabel      *listIndexLabel;
 
-// =================== INFO BLOCK (right, under recorded data)
+// =================== INFO BLOCK
 
     QGroupBox *infoGroup;
     QLabel    *infoLengthLabel;
     QLabel    *infoFreqLabel;
     QLabel    *infoSamplesLabel;
 
+// =================== TRIM BLOCK
+
+    QGroupBox *trimBlock;
+    QPushButton *btnTrimStart;
+    QPushButton *btnTrimAccept;
+    QPushButton *btnTrimDeny;
+    QLabel *recordTimeTrim;
+
+    double m_trimStartSec = -1;
+    double m_trimEndSec = -1;
+    QVector<QCPItemStraightLine *> m_trimLinesStart;
+    QVector<QCPItemStraightLine *> m_trimLinesEnd;
+    TrimState m_trimState = TrimState::Off;
+    bool m_trimDragging = false;
+    bool m_trimDragIsStart = false;
+    bool m_rangeDragAccel = false;
+    bool m_rangeDragGyro = false;
+    static constexpr int TrimDragThresholdPx = 6;
+
 // =================== RIGHT SIDE
+
     QHBoxLayout *settingTypeMethod;
     QHBoxLayout *settingDBName;
     QHBoxLayout *settingSelectMovement;
@@ -130,18 +186,24 @@ private:
 
      QList<QCPItemStraightLine*> m_separatorLines;
 
+     QVector<MotionSample> motionSaved;
+
+     WorkMode workMode = WorkMode::WORK_NONE;
+
 signals:
     void updatePortsClicked();
     void connectPortClicked();
     void closePortClicked();
 
-    void recordingToggled(bool enabled);
     void targetDatabaseChanged(const QString &dbName);
+    void targetMethodChanged(const QString &MethodName);
+    void targetMotionTypeChanged(const MotionType &type);
 
     void saveOnceRequested();
     void discardOnceRequested();
     void prevGestureRequested();
     void nextGestureRequested();
+    void trimRequested(double loSec, double hiSec);
 
     void logMessage(LogLevel level, const QString &text);
 };

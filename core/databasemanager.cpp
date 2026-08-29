@@ -640,7 +640,6 @@ bool DatabaseManager::createDatasetDatabase( const QString &dbName, const QStrin
 }
 
 bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, const QVector<MotionSample> &samples, uint16_t crc16) {
-    qDebug() << "insertGesture";
 
     if (samples.isEmpty())
         return false;
@@ -657,11 +656,6 @@ bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, cons
     }
 
     QSqlQuery query(db);
-
-    MotionSample s = samples.at(0);
-    qDebug() << s.ax << " " << s.ay << " " << s.az;
-    qDebug() << s.gx << " " << s.gy << " " << s.gz;
-    qDebug() << s.time;
 
     query.prepare("INSERT INTO samples (motion_type, sample_count, crc16) "
                   "VALUES (:motion_type, :sample_count, :crc16)");
@@ -681,7 +675,7 @@ bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, cons
                   "(sample_id, sample_index, ax, ay, az, gx, gy, gz, timestamp) "
                   "VALUES (:sample_id, :sample_index, :ax, :ay, :az, :gx, :gy, :gz, :timestamp)");
 
-    for (int i = 0; i < samples.size(); ++i) {
+    for (int i = 0; i < samples.size(); i++) {
         const MotionSample &s = samples.at(i);
         query.bindValue(":sample_id", sampleId);
         query.bindValue(":sample_index", i);

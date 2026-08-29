@@ -18,6 +18,6 @@ struct MotionPacket {
 };
 
 struct SegmentEndPacket {
-    uint32_t count;
+    uint16_t count;
     uint16_t crc16;
 };

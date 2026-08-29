@@ -1,6 +1,8 @@
 #include "core/serialport.h"
 #include "models/packettype.h"
 #include <QDebug>
+#include <cstring>
+#include <cstdint>
 
 SerialPort::SerialPort(QObject *parent)
     : QObject(parent)
@@ -78,54 +80,56 @@ void SerialPort::setState(ConnectionState state) {
 void SerialPort::readData() {
     buffer.append(serial->readAll());
 
-    while (buffer.contains('\n'))
-    {
-        int index = buffer.indexOf('\n');
+    while (buffer.size() >= 1) {
+        quint8 type = static_cast<quint8>(buffer.at(0));
+        int len = frameLength(type);
 
-        QByteArray line = buffer.left(index).trimmed();
-        buffer.remove(0, index + 1);
-
-        QString str(line);
-
-        QStringList values = str.split(',');
-
-        if (values.isEmpty())
+        if (len < 0) {
+            buffer.remove(0, 1);
+            emit logMessage(LogLevel::Warning,
+                            QString("Unknown packet type: %1").arg(type));
             continue;
+        }
 
-        PacketType type =
-            static_cast<PacketType>(values[0].toInt());
+        if (buffer.size() < len) {
+            break;
+        }
 
-        switch(type) {
+        QByteArray frame = buffer.left(len);
+        buffer.remove(0, len);
 
-        case PacketType::LiveMotion:
-        {
+        switch (type) {
+        case static_cast<quint8>(PacketType::LiveMotion): {
             MotionPacket packet;
-            if (!parseMotionPacket(values, packet)) { continue; }
+            if (!parseMotionPacket(frame, packet)) { continue; }
             emit motionPacketReceived(packet);
             break;
         }
-
-        case PacketType::SegmentEnd:
-        {
+        case static_cast<quint8>(PacketType::SegmentEnd): {
             SegmentEndPacket packet;
-            if (!parseSegmentEnd(values, packet)) { continue; }
+            if (!parseSegmentEnd(frame, packet)) { continue; }
             emit segmentEndReceived(packet);
             break;
         }
-
-        case PacketType::Temperature:
-
+        case static_cast<quint8>(PacketType::Temperature):
             emit logMessage(LogLevel::Debug, "Temperature packet received");
             break;
-
         default:
-
             emit logMessage(LogLevel::Warning,
-                            QString("Unknown packet type: %1")
-                                .arg(values[0]));
+                            QString("Unhandled packet type: %1").arg(type));
             break;
-
         }
+    }
+}
+
+int SerialPort::frameLength(quint8 type) const {
+    switch (type) {
+    case static_cast<quint8>(PacketType::LiveMotion):
+        return 1 + static_cast<int>(sizeof(MotionSample)) + 1;
+    case static_cast<quint8>(PacketType::SegmentEnd):
+        return 5;
+    default:
+        return -1;
     }
 }
 
@@ -138,29 +142,30 @@ void SerialPort::handleError(QSerialPort::SerialPortError error) {
     }
 }
 
-bool SerialPort::parseMotionPacket(const QStringList &values, MotionPacket &packet) {
-    if (values.size() < 9) return false;
+bool SerialPort::parseMotionPacket(const QByteArray &frame, MotionPacket &packet) {
+    const int sampleSize = static_cast<int>(sizeof(MotionSample));
+    if (frame.size() < 1 + sampleSize + 1) {
+        return false;
+    }
 
-    packet.sample.ax   = values[1].toFloat();
-    packet.sample.ay   = values[2].toFloat();
-    packet.sample.az   = values[3].toFloat();
-
-    packet.sample.gx   = values[4].toFloat();
-    packet.sample.gy   = values[5].toFloat();
-    packet.sample.gz   = values[6].toFloat();
-
-    packet.sample.time = values[7].toUInt();
-
-    packet.recording   = values[8].toInt() != 0;
+    std::memcpy(&packet.sample, frame.data() + 1, sampleSize);
+    packet.recording = (frame.at(1 + sampleSize) != 0);
 
     return true;
 }
 
-bool SerialPort::parseSegmentEnd(const QStringList &values, SegmentEndPacket &packet) {
-    if (values.size() < 3) return false;
+bool SerialPort::parseSegmentEnd(const QByteArray &frame, SegmentEndPacket &packet) {
+    if (frame.size() < 5) {
+        return false;
+    }
 
-    packet.count = values[1].toUInt();
-    packet.crc16 = static_cast<uint16_t>(values[2].toUInt(nullptr, 16));
+    uint16_t count = 0;
+    uint16_t crc   = 0;
+    std::memcpy(&count, frame.data() + 1, 2);
+    std::memcpy(&crc,   frame.data() + 3, 2);
+
+    packet.count = count;
+    packet.crc16 = crc;
 
     return true;
 }

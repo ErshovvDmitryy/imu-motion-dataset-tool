@@ -48,6 +48,8 @@ private:
     QByteArray buffer;
     ConnectionState currentState = ConnectionState::Disconnected;
 
-    bool parseMotionPacket(const QStringList &values, MotionPacket &packet);
-    bool parseSegmentEnd(const QStringList &values, SegmentEndPacket &packet);
+    int frameLength(quint8 type) const;
+
+    bool parseMotionPacket(const QByteArray &frame, MotionPacket &packet);
+    bool parseSegmentEnd(const QByteArray &frame, SegmentEndPacket &packet);
 };
