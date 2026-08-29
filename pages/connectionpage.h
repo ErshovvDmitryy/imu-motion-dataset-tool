@@ -25,11 +25,19 @@ class QGroupBox;
 class QStackedWidget;
 class QGridLayout;
 
+// =================== Work modes:
+// 1. None - live graph in real time, accel and gyro graph draw motion. Can't save motion
+// 2. Once - live graph in real time, accel and gyro graph draw motion.
+//                              Saved last motion in buffer. User can save and edit motion
+// 3. List - live graph in real time, accel and gyro graph draw motion. Motions saved in buffer QVector<Motion>
+//                                  User can switch, edit and saved  motion.
+
 enum class WorkMode : int {
     WORK_NONE = 1,
     WORK_ONCE,
     WORK_LIST
 };
+
 
 class ConnectionPage : public QWidget
 {
@@ -38,15 +46,16 @@ class ConnectionPage : public QWidget
 public:
     explicit ConnectionPage(QWidget *parent = nullptr);
 
-    void drawSeparator();
-    void drawSavedSegmentSeparators();
-    void updateStream(const MotionPacket &packet);
     void setPorts(const QStringList &ports);
     void setAvailableDatabases(const QStringList &databases);
 
-    void incommingSegment(QVector<MotionSample> &receivedData);
+    void updateStream(const MotionPacket &packet);              // Method for draw real time graph
+    void incomingSegment(QVector<MotionSample> &receivedData); // Method for draw saved motion in graph
 
-    PortConfig connectTo();
+    void drawSeparator();               // Draw separators in real time graph
+    void drawSavedSegmentSeparators();  // Draw separators for saved motion
+
+    PortConfig connectTo();     // Connect to port selected from QComboBox portList
 
     void setWorkMode(WorkMode &mode);
     WorkMode getWorkMode() const;
@@ -56,23 +65,43 @@ private:
     void createWidgets();
     void createLayouts();
     void connectSignals();
-    void updateTime(const uint32_t time);
+
+// =================== Func for setups widgets
+
+    void setupGraphs();
+    void setupComboBox();
+    void setupButtonsOnPage();
+    void setupRecordedDataWidget();
+    void setupInfoBlockWidget();
+    void setupTrimBlockWidget();
+    void setupDataBaseBlockWidget();
+
+// =================== Func for setups layouts
+
+    void setupPortSettingsLayout();
+
+// =================== Private function: GRAPH func
 
     void clearAccelGyroGraphs();
     void clearAllGraphs();
-    void resetCountSnapshots() { snaphots = 0; }
+    void clearSeparators();
+
     void updateGyroGraph(const MotionSample &sample);
     void updateAccelGraph(const MotionSample &sample);
     void updateliveDataPlotGraph(const MotionSample &sample);
-
-    void addSeparator(QCustomPlot *plot, double x);
-    void clearSeparators();
-    void resetTime();
-
-    void updateInfoBox(const float &infoLength, const float &infoFreqLabel, const int infoSamplesLabel);
     void updateSavedGraph(QVector<MotionSample> &motionSaved);
 
+    void addSeparator(QCustomPlot *plot, double x);
+
+    void updateTime(const uint32_t time);
+    void resetTime();
+
+    void resetCountSnapshots() { snaphots = 0; }
+
+    void updateInfoBox(const float &infoLength, const float &infoFreqLabel, const int infoSamplesLabel);
     void onSaveOnceClicked();
+
+// =================== Private function: TRIM func
 
     enum class TrimState { Off, AwaitStart, AwaitEnd, Adjust };
 
@@ -89,6 +118,9 @@ private:
     void setTrimInteractionEnabled(bool on);
     double clampToData(double sec) const;
 
+
+// =================== MAIN PAGE LAYOUTS DECLARATION
+
     QWidget *leftWidget;
     QWidget *rightWidget;
 
@@ -96,17 +128,17 @@ private:
 
     QHBoxLayout *mainLayout;
     QVBoxLayout *leftLayout;
-    QVBoxLayout *rigthLayout;
 
+    QVBoxLayout *rightLayout;
     QGridLayout *rightUnderGraphLayout;
 
-// =================== LEFT SIDE
+// =================== LEFT SIDE DECLARATION
 
     QVBoxLayout *settingsLayoutLeft;
     QVBoxLayout *settingsLayoutPort;
 
     QHBoxLayout *portSettingsLayout;
-    QHBoxLayout *opCloseLayout;
+    QHBoxLayout *portButtonsLayout;
 
     QComboBox *portList;
     QComboBox *baudRate;
@@ -115,31 +147,29 @@ private:
     QPushButton *btnClosePort;
     QPushButton *updatePortList;
 
-    QComboBox *targetDbCombo;
+// =================== RECORDED DATA DECLARATION
 
-// =================== RECORDED DATA
-
-    QGroupBox   *recordedDataGroup;
+    QGroupBox *recordedDataGroup;
     QStackedWidget *recordedDataStack;
 
-    QLabel      *noneModeLabel;
+    QLabel *noneModeLabel;
 
-    QLabel      *onceStatusLabel;
+    QLabel *onceStatusLabel;
     QPushButton *btnSaveOnce;
     QPushButton *btnDiscardOnce;
 
     QPushButton *btnPrevGesture;
     QPushButton *btnNextGesture;
-    QLabel      *listIndexLabel;
+    QLabel *listIndexLabel;
 
-// =================== INFO BLOCK
+// =================== INFO BLOCK DECLARATION
 
     QGroupBox *infoGroup;
-    QLabel    *infoLengthLabel;
-    QLabel    *infoFreqLabel;
-    QLabel    *infoSamplesLabel;
+    QLabel *infoLengthLabel;
+    QLabel *infoFreqLabel;
+    QLabel *infoSamplesLabel;
 
-// =================== TRIM BLOCK
+// =================== TRIM BLOCK DECLARATION
 
     QGroupBox *trimBlock;
     QPushButton *btnTrimStart;
@@ -158,23 +188,25 @@ private:
     bool m_rangeDragGyro = false;
     static constexpr int TrimDragThresholdPx = 6;
 
-// =================== RIGHT SIDE
 
-    QHBoxLayout *settingTypeMethod;
-    QHBoxLayout *settingDBName;
-    QHBoxLayout *settingSelectMovement;
+// =================== DATABASE BLOCK DECLARATION
 
-    QHBoxLayout *underGraphLayout;
+    QGroupBox *databaseBlock;
+
+    QComboBox *targetDbCombo;
+    QComboBox *recordingMethod;
+    QComboBox *motionType;
+
+// =================== RIGHT SIDE DECLARATION
 
     QVBoxLayout *settingsRightLeftArea;
     QVBoxLayout *settingsRightRightArea;
 
+// =================== GRAPH AND RELATED
+
     QCustomPlot *gyroGraph;
     QCustomPlot *accelGraph;
     QCustomPlot *liveDataPlot;
-
-    QComboBox *methodOfrecord;
-    QComboBox *motionType;
 
     double tempTime = 0;
     double deltaTime = 0;
@@ -186,11 +218,12 @@ private:
 
      QList<QCPItemStraightLine*> m_separatorLines;
 
-     QVector<MotionSample> motionSaved;
-
      WorkMode workMode = WorkMode::WORK_NONE;
 
+     QVector<MotionSample> motionSaved;
+
 signals:
+
     void updatePortsClicked();
     void connectPortClicked();
     void closePortClicked();

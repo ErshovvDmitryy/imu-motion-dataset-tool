@@ -19,13 +19,13 @@ QStringList CreateDBDialog::returnDBdata() {
     QStringList data;
     data.append(m_fileName->text());
     data.append(m_pathEdit->text());
-    data.append(textBrowser->toPlainText());
+    data.append(m_textBrowser->toPlainText());
     return data;
 }
 
 void CreateDBDialog::onOkClicked()
 {
-    if ( !m_pathEdit->text().isEmpty() && !textBrowser->toPlainText().isEmpty() && !m_fileName->text().isEmpty())
+    if ( !m_pathEdit->text().isEmpty() && !m_textBrowser->toPlainText().isEmpty() && !m_fileName->text().isEmpty())
     {
         accept();
     }
@@ -56,6 +56,7 @@ void CreateDBDialog::onEditPathClicked() {
 }
 
 void CreateDBDialog::setupUI() {
+
     setWindowTitle("Exec db");
     setMinimumSize(400, 250);
     setModal(true);
@@ -64,8 +65,8 @@ void CreateDBDialog::setupUI() {
     m_buttonsLayout = new QHBoxLayout;
     m_setPathLayout = new QHBoxLayout;
 
-    textBrowser = new QTextEdit;
-    textBrowser->setPlaceholderText(" description ");
+    m_textBrowser = new QTextEdit;
+    m_textBrowser->setPlaceholderText(" description ");
 
     m_info1 = new QLabel("Write description for DB");
     m_info2 = new QLabel("Set file parametrs");
@@ -86,7 +87,7 @@ void CreateDBDialog::setupUI() {
     m_buttonsLayout->addWidget(m_btnCancel);
 
     m_mainLayout->addWidget(m_info1);
-    m_mainLayout->addWidget(textBrowser);
+    m_mainLayout->addWidget(m_textBrowser);
     m_mainLayout->addWidget(m_info2);
     m_mainLayout->addWidget(m_fileName);
     m_mainLayout->addLayout(m_setPathLayout);

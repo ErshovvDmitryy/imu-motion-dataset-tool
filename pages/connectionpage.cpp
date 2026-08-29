@@ -28,7 +28,7 @@ void ConnectionPage::createWidgets() {
     mainLayout = new QHBoxLayout(this);
 
     leftLayout = new QVBoxLayout();
-    rigthLayout = new QVBoxLayout();
+    rightLayout = new QVBoxLayout();
 
     leftWidget = new QWidget();
     leftWidget->setMaximumWidth(500);
@@ -38,232 +38,47 @@ void ConnectionPage::createWidgets() {
 
     rightUnderGraphLayout = new QGridLayout();
 
-// =================== LEFT SIDE
+// =================== LEFT SIDE===================
 
     settingsLayoutLeft = new QVBoxLayout();
     settingsLayoutPort = new QVBoxLayout();
 
     portSettingsLayout = new QHBoxLayout();
-    opCloseLayout = new QHBoxLayout();
-
-    portList = new QComboBox();
-
-    baudRate = new QComboBox();
-    baudRate->addItem("115200");
-    baudRate->addItem("960000");
-
-    btnConnectPort = new QPushButton("Connect to port");
-    btnClosePort = new QPushButton("Disconect from port");
-    updatePortList = new QPushButton("Update ports");
+    portButtonsLayout = new QHBoxLayout();
     \
-// =================== RIGHT SIDE
 
-    settingTypeMethod = new QHBoxLayout();
-    settingDBName = new QHBoxLayout();
-    settingSelectMovement = new QHBoxLayout();
+// =================== RIGHT SIDE ===================
 
-    underGraphLayout = new QHBoxLayout();
+    setupComboBox();            //  Setup combo box on page
+    setupGraphs();              //  Setup graph on page
+    setupButtonsOnPage();       //  Setup buttons on page
 
-    settingsRightLeftArea = new QVBoxLayout();
-    settingsRightRightArea = new QVBoxLayout();
-
-    methodOfrecord = new QComboBox();
-    methodOfrecord->addItem("None");
-    methodOfrecord->addItem("Once method");
-    methodOfrecord->addItem("List method");
-
-    motionType = new QComboBox();
-    motionType->addItem("DoubleTap", static_cast<int>(MotionType::DoubleTap));
-    motionType->addItem("SwipeLeft", static_cast<int>(MotionType::SwipeLeft));
-    motionType->addItem("SwipeRight", static_cast<int>(MotionType::SwipeRight));
-    motionType->addItem("SwipeUp", static_cast<int>(MotionType::SwipeUp));
-    motionType->addItem("SwipeDown", static_cast<int>(MotionType::SwipeDown));
-    motionType->addItem("CircleCW", static_cast<int>(MotionType::CircleCW));
-    motionType->addItem("CircleCCW", static_cast<int>(MotionType::CircleCCW));
-    motionType->addItem("Shake", static_cast<int>(MotionType::Shake));
-    motionType->addItem("NormalHandMovement", static_cast<int>(MotionType::NormalHandMovement));
-    motionType->addItem("Walking", static_cast<int>(MotionType::Walking));
-    motionType->addItem("Unlabeled", static_cast<int>(MotionType::Unlabeled));
-    motionType->addItem("Unknown", static_cast<int>(MotionType::Unknown));
-
-    gyroGraph = new QCustomPlot();
-    accelGraph= new QCustomPlot();
-    liveDataPlot = new QCustomPlot();
-
-    gyroGraph->setMinimumSize(200, 225);
-    accelGraph->setMinimumSize(200, 225);
-    liveDataPlot->setMinimumSize(400, 350);
-
-    for (int i = 0; i < 3; i++){
-        gyroGraph->addGraph();
-        accelGraph->addGraph();
-        liveDataPlot->addGraph();
-    }
-
-    gyroGraph->graph(0)->setPen(QPen(Qt::red));
-    accelGraph->graph(0)->setPen(QPen(Qt::red));
-
-    gyroGraph->graph(1)->setPen(QPen(Qt::green));
-    accelGraph->graph(1)->setPen(QPen(Qt::green));
-
-    gyroGraph->graph(2)->setPen(QPen(Qt::blue));
-    accelGraph->graph(2)->setPen(QPen(Qt::blue));
-
-    liveDataPlot->graph(0)->setPen(QPen(Qt::magenta, 2));
-
-    gyroGraph->xAxis->setLabel("Time (s)");
-    gyroGraph->yAxis->setLabel("Gyro (°/с)");
-    accelGraph->xAxis->setLabel("Time (s)");
-    accelGraph->yAxis->setLabel("Accel (g)");
-    liveDataPlot->xAxis->setLabel("Time (s)");
-    liveDataPlot->yAxis->setLabel("Total Accel (g)");
-
-    targetDbCombo = new QComboBox();
-
-// =================== RECORDED DATA
-
-    recordedDataGroup = new QGroupBox("Recorded Data");
-    recordedDataStack = new QStackedWidget();
-
-    noneModeLabel = new QLabel("Recording disabled");
-    noneModeLabel->setAlignment(Qt::AlignCenter);
-    noneModeLabel->setStyleSheet("color: gray;");
-
-    onceStatusLabel = new QLabel("Buffer: 0 samples");
-    btnSaveOnce = new QPushButton("Save");
-    btnDiscardOnce = new QPushButton("Discard");
-    btnPrevGesture = new QPushButton("<");
-    btnNextGesture = new QPushButton(">");
-    listIndexLabel = new QLabel("0 / 0");
-    btnPrevGesture->setFixedWidth(40);
-    btnNextGesture->setFixedWidth(40);
-
-    QWidget *sharedPage = new QWidget();
-    QHBoxLayout *sharedLayout = new QHBoxLayout(sharedPage);
-    sharedLayout->setContentsMargins(0, 0, 0, 0);
-    sharedLayout->addWidget(onceStatusLabel);
-    sharedLayout->addStretch();
-    sharedLayout->addWidget(btnPrevGesture);
-    sharedLayout->addWidget(listIndexLabel);
-    sharedLayout->addWidget(btnNextGesture);
-    sharedLayout->addWidget(btnDiscardOnce);
-    sharedLayout->addWidget(btnSaveOnce);
-
-    recordedDataStack->addWidget(noneModeLabel);
-    recordedDataStack->addWidget(sharedPage);
-    recordedDataStack->setCurrentIndex(0);
-
-    QVBoxLayout *recordedDataLayout = new QVBoxLayout(recordedDataGroup);
-    recordedDataLayout->setContentsMargins(6, 6, 6, 6);
-    recordedDataLayout->addWidget(recordedDataStack);
-
-// =================== INFO BLOCK
-
-    infoGroup = new QGroupBox("Sample Info");
-
-    QLabel *lengthCaption = new QLabel("Length:");
-    QLabel *freqCaption   = new QLabel("Freq:");
-    QLabel *samplesCaption = new QLabel("Samples:");
-
-    infoLengthLabel  = new QLabel("-- s");
-    infoFreqLabel    = new QLabel("-- Hz");
-    infoSamplesLabel = new QLabel("--");
-
-    QGridLayout *infoGridLayout = new QGridLayout(infoGroup);
-    infoGridLayout->setContentsMargins(6, 6, 6, 6);
-    infoGridLayout->addWidget(lengthCaption,  0, 0);
-    infoGridLayout->addWidget(infoLengthLabel, 0, 1);
-    infoGridLayout->addWidget(freqCaption,    1, 0);
-    infoGridLayout->addWidget(infoFreqLabel,  1, 1);
-    infoGridLayout->addWidget(samplesCaption, 2, 0);
-    infoGridLayout->addWidget(infoSamplesLabel, 2, 1);
-    infoGridLayout->setColumnStretch(2, 1);
-
-    btnPrevGesture->setEnabled(false);
-    btnNextGesture->setEnabled(false);
-    btnSaveOnce->setEnabled(false);
-    btnDiscardOnce->setEnabled(false);
-
-// =================== TRIM BLOCK
-
-    trimBlock = new QGroupBox("Trim block");
-
-    btnTrimStart = new QPushButton("Use trim");
-    btnTrimAccept = new QPushButton("Accept");
-    btnTrimDeny = new QPushButton("Deny");
-
-    btnTrimStart->setFixedWidth(80);
-    btnTrimAccept->setFixedWidth(80);
-    btnTrimDeny->setFixedWidth(100);
-
-    btnTrimStart->setEnabled(false);
-    btnTrimAccept->setEnabled(false);
-    btnTrimDeny->setEnabled(false);
-
-    recordTimeTrim = new QLabel("0 / 0");
-
-    QWidget *trimPage = new QWidget();
-    QHBoxLayout *trimLayout = new QHBoxLayout(trimPage);
-    trimLayout->setContentsMargins(0, 0, 0, 0);
-    trimLayout->addWidget(btnTrimStart);
-    trimLayout->addStretch();
-    trimLayout->addWidget(recordTimeTrim);
-    trimLayout->addStretch();
-    trimLayout->addWidget(btnTrimAccept);
-    trimLayout->addWidget(btnTrimDeny);
-
-    QVBoxLayout *rightDownLayout = new QVBoxLayout(trimBlock);
-    rightDownLayout->setContentsMargins(6, 6, 6, 6);
-    rightDownLayout->addWidget(trimPage);
+    setupDataBaseBlockWidget(); //  Setup db block
+    setupRecordedDataWidget();  //  Setup recorded data block on page
+    setupInfoBlockWidget();     //  Setup info block on page
+    setupTrimBlockWidget();     //  Setup trim block on page
 
 }
 
 void ConnectionPage::createLayouts() {
 
-// =================== LEFT SIDE
+// =================== LEFT SIDE ===================
 
-    portSettingsLayout->addWidget(updatePortList);
-    portSettingsLayout->addStretch();
-    portSettingsLayout->addWidget(new QLabel("Select port:"));
-    portSettingsLayout->addWidget(portList);
-    portSettingsLayout->addWidget(new QLabel("  Switch baud rate:"));
-    portSettingsLayout->addWidget(baudRate);
-
-    opCloseLayout->addWidget(btnConnectPort);
-    opCloseLayout->addWidget(btnClosePort);
-
-    settingsLayoutPort->addLayout(portSettingsLayout);
-    settingsLayoutPort->addLayout(opCloseLayout);
+    setupPortSettingsLayout(); // Include layout: settingsLayoutPort
 
     leftLayout->addLayout(settingsLayoutPort);
-
     leftLayout->addWidget(liveDataPlot);
     leftLayout->addStretch(0);
 
-// =================== RIGHT SIDE
+// =================== RIGHT SIDE ===================
 
-    settingTypeMethod->addWidget(new QLabel("Choose method record: "));
-    settingTypeMethod->addWidget(methodOfrecord);
-    settingTypeMethod->addStretch();
+    rightLayout->addWidget(gyroGraph);
+    rightLayout->addWidget(accelGraph);
 
-    settingDBName->addWidget(new QLabel("Choose database for seves records: "));
-    settingDBName->addWidget(targetDbCombo);
-    settingDBName->addStretch();
+    rightLayout->addLayout(rightUnderGraphLayout);
+    rightLayout->addStretch();
 
-    settingSelectMovement->addWidget(new QLabel("Select movement"));
-    settingSelectMovement->addWidget(motionType);
-
-    rigthLayout->addWidget(gyroGraph);
-    rigthLayout->addWidget(accelGraph);
-
-    settingsRightLeftArea->addLayout(settingSelectMovement);
-    settingsRightLeftArea->addLayout(settingTypeMethod);
-    settingsRightLeftArea->addLayout(settingDBName);
-
-    rigthLayout->addLayout(rightUnderGraphLayout);
-    rigthLayout->addStretch();
-
-    rightUnderGraphLayout->addLayout(settingsRightLeftArea, 0, 0);
+    rightUnderGraphLayout->addWidget(databaseBlock, 0, 0);
     rightUnderGraphLayout->addWidget(trimBlock, 0, 1);
     rightUnderGraphLayout->addWidget(infoGroup, 1, 0);
     rightUnderGraphLayout->addWidget(recordedDataGroup, 1, 1);
@@ -271,7 +86,7 @@ void ConnectionPage::createLayouts() {
 // =================== SETUP PAGE
 
     leftWidget->setLayout(leftLayout);
-    rightWidget->setLayout(rigthLayout);
+    rightWidget->setLayout(rightLayout);
 
     mainSplitter->addWidget(leftWidget);
     mainSplitter->addWidget(rightWidget);
@@ -308,10 +123,10 @@ void ConnectionPage::connectSignals() {
             this,
             [this](int) { emit targetDatabaseChanged(targetDbCombo->currentText()); });
 
-    connect(methodOfrecord,
+    connect(recordingMethod,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
             this,
-            [this](int) { emit targetMethodChanged(methodOfrecord->currentText()); });
+            [this](int) { emit targetMethodChanged(recordingMethod->currentText()); });
 
     connect(motionType,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -323,7 +138,7 @@ void ConnectionPage::connectSignals() {
                 emit targetMotionTypeChanged(type);
             });
 
-    connect(methodOfrecord,
+    connect(recordingMethod,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
             this,
             [this](int index) {
@@ -665,10 +480,10 @@ void ConnectionPage::updateStream(const MotionPacket &packet) {
             addSeparator(accelGraph, tempTime);
             addSeparator(gyroGraph, tempTime);
 
-            float lenght = tempTime - timeStartSnaphots;
+            float length = tempTime - timeStartSnaphots;
             float freq = snaphots / ( tempTime - timeStartSnaphots );
 
-            updateInfoBox( lenght, freq, snaphots );
+            updateInfoBox( length, freq, snaphots );
         }
 
         lastRecordingState = packet.recording;
@@ -734,12 +549,12 @@ void ConnectionPage::updateSavedGraph(QVector<MotionSample> &motionSaved){
         updateliveDataPlotGraph(sample);
     }
 
-    float lenght = tempTime - timeStartSnaphots;
+    float length = tempTime - timeStartSnaphots;
     float freq = motionSaved.size() / ( tempTime - timeStartSnaphots );
-    updateInfoBox(lenght, freq, motionSaved.size());
+    updateInfoBox(length, freq, motionSaved.size());
 }
 
-void ConnectionPage::incommingSegment(QVector<MotionSample> &receivedData) {
+void ConnectionPage::incomingSegment(QVector<MotionSample> &receivedData) {
     if (workMode == WorkMode::WORK_ONCE) {
         if (receivedData.isEmpty()) {
             return;
@@ -867,4 +682,230 @@ void ConnectionPage::updateliveDataPlotGraph(const MotionSample &sample)
     liveDataPlot->yAxis->rescale(true);
 
     liveDataPlot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void ConnectionPage::setupGraphs() {
+
+    gyroGraph = new QCustomPlot();
+    accelGraph= new QCustomPlot();
+    liveDataPlot = new QCustomPlot();
+
+    gyroGraph->setMinimumSize(200, 225);
+    accelGraph->setMinimumSize(200, 225);
+    liveDataPlot->setMinimumSize(400, 350);
+
+    for (int i = 0; i < 3; i++){
+        gyroGraph->addGraph();
+        accelGraph->addGraph();
+        liveDataPlot->addGraph();
+    }
+
+    gyroGraph->graph(0)->setPen(QPen(Qt::red));
+    accelGraph->graph(0)->setPen(QPen(Qt::red));
+
+    gyroGraph->graph(1)->setPen(QPen(Qt::green));
+    accelGraph->graph(1)->setPen(QPen(Qt::green));
+
+    gyroGraph->graph(2)->setPen(QPen(Qt::blue));
+    accelGraph->graph(2)->setPen(QPen(Qt::blue));
+
+    liveDataPlot->graph(0)->setPen(QPen(Qt::magenta, 2));
+
+    gyroGraph->xAxis->setLabel("Time (s)");
+    gyroGraph->yAxis->setLabel("Gyro (°/с)");
+    accelGraph->xAxis->setLabel("Time (s)");
+    accelGraph->yAxis->setLabel("Accel (g)");
+    liveDataPlot->xAxis->setLabel("Time (s)");
+    liveDataPlot->yAxis->setLabel("Total Accel (g)");
+}
+
+void ConnectionPage::setupComboBox() {
+
+// =================== LEFT SIDE PAGE ===================
+
+    portList = new QComboBox();
+
+    baudRate = new QComboBox();
+    baudRate->addItem("115200");
+    baudRate->addItem("960000");
+
+// =================== RIGHT SIDE PAGE ===================
+
+}
+
+void ConnectionPage::setupButtonsOnPage() {
+
+// =================== LEFT SIDE PAGE ===================
+
+    btnConnectPort = new QPushButton("Connect to port");
+    btnClosePort = new QPushButton("Disconnect from port");
+    updatePortList = new QPushButton("Update ports");
+
+// =================== RIGHT SIDE PAGE ===================
+
+    // Buttons declared in func group box
+}
+
+void ConnectionPage::setupRecordedDataWidget() {
+    recordedDataGroup = new QGroupBox("Recorded Data");
+    recordedDataStack = new QStackedWidget();
+
+    noneModeLabel = new QLabel("Recording disabled");
+    noneModeLabel->setAlignment(Qt::AlignCenter);
+    noneModeLabel->setStyleSheet("color: gray;");
+
+    onceStatusLabel = new QLabel("Buffer: 0 samples");
+    btnSaveOnce = new QPushButton("Save");
+    btnDiscardOnce = new QPushButton("Discard");
+    btnPrevGesture = new QPushButton("<");
+    btnNextGesture = new QPushButton(">");
+    listIndexLabel = new QLabel("0 / 0");
+    btnPrevGesture->setFixedWidth(40);
+    btnNextGesture->setFixedWidth(40);
+
+    QWidget *sharedPage = new QWidget();
+    QHBoxLayout *sharedLayout = new QHBoxLayout(sharedPage);
+    sharedLayout->setContentsMargins(0, 0, 0, 0);
+    sharedLayout->addWidget(onceStatusLabel);
+    sharedLayout->addStretch();
+    sharedLayout->addWidget(btnPrevGesture);
+    sharedLayout->addWidget(listIndexLabel);
+    sharedLayout->addWidget(btnNextGesture);
+    sharedLayout->addWidget(btnDiscardOnce);
+    sharedLayout->addWidget(btnSaveOnce);
+
+    recordedDataStack->addWidget(noneModeLabel);
+    recordedDataStack->addWidget(sharedPage);
+    recordedDataStack->setCurrentIndex(0);
+
+    QVBoxLayout *recordedDataLayout = new QVBoxLayout(recordedDataGroup);
+    recordedDataLayout->setContentsMargins(6, 6, 6, 6);
+    recordedDataLayout->addWidget(recordedDataStack);
+}
+
+void ConnectionPage::setupInfoBlockWidget() {
+    infoGroup = new QGroupBox("Sample Info");
+
+    QLabel *lengthCaption = new QLabel("Length:");
+    QLabel *freqCaption   = new QLabel("Freq:");
+    QLabel *samplesCaption = new QLabel("Samples:");
+
+    infoLengthLabel  = new QLabel("-- s");
+    infoFreqLabel    = new QLabel("-- Hz");
+    infoSamplesLabel = new QLabel("--");
+
+    QGridLayout *infoGridLayout = new QGridLayout(infoGroup);
+    infoGridLayout->setContentsMargins(6, 6, 6, 6);
+    infoGridLayout->addWidget(lengthCaption,  0, 0);
+    infoGridLayout->addWidget(infoLengthLabel, 0, 1);
+    infoGridLayout->addWidget(freqCaption,    1, 0);
+    infoGridLayout->addWidget(infoFreqLabel,  1, 1);
+    infoGridLayout->addWidget(samplesCaption, 2, 0);
+    infoGridLayout->addWidget(infoSamplesLabel, 2, 1);
+    infoGridLayout->setColumnStretch(2, 1);
+
+    btnPrevGesture->setEnabled(false);
+    btnNextGesture->setEnabled(false);
+    btnSaveOnce->setEnabled(false);
+    btnDiscardOnce->setEnabled(false);
+}
+
+void ConnectionPage::setupTrimBlockWidget() {
+    trimBlock = new QGroupBox("Trim block");
+
+    btnTrimStart = new QPushButton("Use trim");
+    btnTrimAccept = new QPushButton("Accept");
+    btnTrimDeny = new QPushButton("Deny");
+
+    btnTrimStart->setFixedWidth(80);
+    btnTrimAccept->setFixedWidth(80);
+    btnTrimDeny->setFixedWidth(100);
+
+    btnTrimStart->setEnabled(false);
+    btnTrimAccept->setEnabled(false);
+    btnTrimDeny->setEnabled(false);
+
+    recordTimeTrim = new QLabel("0 / 0");
+
+    QWidget *trimPage = new QWidget();
+    QHBoxLayout *trimLayout = new QHBoxLayout(trimPage);
+    trimLayout->setContentsMargins(0, 0, 0, 0);
+    trimLayout->addWidget(btnTrimStart);
+    trimLayout->addStretch();
+    trimLayout->addWidget(recordTimeTrim);
+    trimLayout->addStretch();
+    trimLayout->addWidget(btnTrimAccept);
+    trimLayout->addWidget(btnTrimDeny);
+
+    QVBoxLayout *rightDownLayout = new QVBoxLayout(trimBlock);
+    rightDownLayout->setContentsMargins(6, 6, 6, 6);
+    rightDownLayout->addWidget(trimPage);
+}
+
+void ConnectionPage::setupDataBaseBlockWidget() {
+
+    recordingMethod = new QComboBox();
+    recordingMethod->addItem("None");
+    recordingMethod->addItem("Once method");
+    recordingMethod->addItem("List method");
+
+    motionType = new QComboBox();
+    motionType->addItem("DoubleTap", static_cast<int>(MotionType::DoubleTap));
+    motionType->addItem("SwipeLeft", static_cast<int>(MotionType::SwipeLeft));
+    motionType->addItem("SwipeRight", static_cast<int>(MotionType::SwipeRight));
+    motionType->addItem("SwipeUp", static_cast<int>(MotionType::SwipeUp));
+    motionType->addItem("SwipeDown", static_cast<int>(MotionType::SwipeDown));
+    motionType->addItem("CircleCW", static_cast<int>(MotionType::CircleCW));
+    motionType->addItem("CircleCCW", static_cast<int>(MotionType::CircleCCW));
+    motionType->addItem("Shake", static_cast<int>(MotionType::Shake));
+    motionType->addItem("NormalHandMovement", static_cast<int>(MotionType::NormalHandMovement));
+    motionType->addItem("Walking", static_cast<int>(MotionType::Walking));
+    motionType->addItem("Unlabeled", static_cast<int>(MotionType::Unlabeled));
+    motionType->addItem("Unknown", static_cast<int>(MotionType::Unknown));
+
+    targetDbCombo = new QComboBox();
+
+    databaseBlock = new QGroupBox("DB Block");
+
+    QWidget *dbBlock = new QWidget();
+
+    QHBoxLayout *methodOfRecordLayout = new QHBoxLayout();
+    methodOfRecordLayout->setContentsMargins(0, 0, 0, 0);
+    methodOfRecordLayout->addWidget(new QLabel("Choose method record: "));
+    methodOfRecordLayout->addWidget(recordingMethod);
+    methodOfRecordLayout->addStretch();
+
+    QHBoxLayout *selectMovementLayout = new QHBoxLayout();
+    selectMovementLayout->addWidget(new QLabel("Select movement"));
+    selectMovementLayout->addWidget(motionType);
+    selectMovementLayout->addStretch();
+
+    QHBoxLayout *selectDataBaseLayout = new QHBoxLayout();
+    selectDataBaseLayout->addWidget(new QLabel("Select database for save records"));
+    selectDataBaseLayout->addWidget(targetDbCombo);
+    selectDataBaseLayout->addStretch();
+
+    QVBoxLayout *dbLayout = new QVBoxLayout(dbBlock);
+    dbLayout->addLayout(methodOfRecordLayout);
+    dbLayout->addLayout(selectMovementLayout);
+    dbLayout->addLayout(selectDataBaseLayout);
+
+    QHBoxLayout *topLeftLayout = new QHBoxLayout(databaseBlock);
+    topLeftLayout->setContentsMargins(6, 6, 6, 6);
+    topLeftLayout->addWidget(dbBlock);
+}
+
+void ConnectionPage::setupPortSettingsLayout() {
+    portSettingsLayout->addWidget(updatePortList);
+    portSettingsLayout->addStretch();
+    portSettingsLayout->addWidget(new QLabel("Select port:"));
+    portSettingsLayout->addWidget(portList);
+    portSettingsLayout->addWidget(new QLabel("  Switch baud rate:"));
+    portSettingsLayout->addWidget(baudRate);
+
+    portButtonsLayout->addWidget(btnConnectPort);
+    portButtonsLayout->addWidget(btnClosePort);
+
+    settingsLayoutPort->addLayout(portSettingsLayout);
+    settingsLayoutPort->addLayout(portButtonsLayout);
 }

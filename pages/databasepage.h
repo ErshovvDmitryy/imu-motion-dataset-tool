@@ -33,9 +33,14 @@ public:
     explicit DataBasePage(DatabaseManager *dbManager, QWidget *parent = nullptr);
 
 private:
+
     void createWidgets();
     void createLayouts();
     void connectSignals();
+
+    void setupGraph();
+    void setupButtonsOnPage();
+    void setupsTableView();
 
     void updateTreeView();
 
@@ -82,7 +87,7 @@ private:
 
     QHBoxLayout *mainLayout;
     QVBoxLayout *leftLayout;
-    QVBoxLayout *rigthLayout;
+    QVBoxLayout *rightLayout;
 
 // =================== LEFT SIDE
 
@@ -102,15 +107,12 @@ private:
 // =================== RIGHT SIDE
 
     QHBoxLayout *pathLayout;
-    QHBoxLayout *sampleDo;
+    QHBoxLayout *exportLayout;
     QVBoxLayout *pathAreaLeft;
     QVBoxLayout *pathAreaRight;
     QHBoxLayout *pathArea;
 
     QHBoxLayout *areaBtnGraph;
-
-    QHBoxLayout *samplesArea;
-    QVBoxLayout *samplesAreaRight;
 
     QCustomPlot *gyroGraph;
     QCustomPlot *accelGraph;

@@ -42,10 +42,14 @@ DataBasePage::DataBasePage(DatabaseManager *dbManager, QWidget *parent)
 
 void DataBasePage::createWidgets() {
 
+// =================== GLOBAL PAGE SETTINGS ===================
+
+    // The widgets that organaize the main layout page declared here
+
     mainLayout = new QHBoxLayout(this);
 
     leftLayout = new QVBoxLayout();
-    rigthLayout = new QVBoxLayout();
+    rightLayout = new QVBoxLayout();
 
     leftWidget = new QWidget();
     rightWidget = new QWidget();
@@ -54,128 +58,40 @@ void DataBasePage::createWidgets() {
 
     mainSplitter = new QSplitter(Qt::Horizontal, this);
 
-    samplesModel = new QSqlTableModel(this);
-    motionDataModel = new QSqlTableModel(this);
+// =================== LEFT SIDE ===================
 
-// =================== LEFT SIDE
+    // All widgets stacked in vertial layout
+    // All buttuns has been declarede in func: setupButtons()
 
-    graphLayout = new QHBoxLayout();
+// =================== RIGHT SIDE ===================
 
-    btnOpenDB = new QPushButton("Open DB");
-    btnDeleteDB = new QPushButton("Delete DB");
-    btnEditDB = new QPushButton("Edit DB");
-    btnCreateDB = new QPushButton("Create DB");
-    btnRefreshDB = new QPushButton("Refresh DB");
+    pathLayout = new QHBoxLayout();     // Include QLineEdit and "set path" button
+    exportLayout = new QHBoxLayout();   // Include: Export,
+                                        //export all and remove from db buttons
+    graphLayout = new QHBoxLayout();    // Include graph
 
-    treeView = new QTreeView();
+    pathArea = new QHBoxLayout();       //
+    pathAreaRight = new QVBoxLayout();  // Create
+    pathAreaLeft = new QVBoxLayout();   //
 
-    treeModel = new QStandardItemModel();
+    areaBtnGraph = new QHBoxLayout();   // Horizontal layout include buttons func:
+                                        // refresh, cut, motion type, accept/deny cut,
+                                        // rndo/next motion, add/extrect selected
 
-    treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-
-    treeModel->setHorizontalHeaderLabels({"Name", "Count writes"});
-    treeView->setModel(treeModel);
-    treeView->setHeaderHidden(false);
-
-    treeView->header()->setSectionResizeMode(QHeaderView::Interactive);
-    treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-    treeView->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-
-    parentItem = new QStandardItem();
-    parentItem = treeModel->invisibleRootItem();
-
-    if (!m_dbManager->isInitialized()) {
-        btnOpenDB->setEnabled(false);
-        btnDeleteDB->setEnabled(false);
-        btnEditDB->setEnabled(false);
-        btnCreateDB->setEnabled(false);
-    }
-
-// =================== RIGHT SIDE
-
-    sampleDo = new QHBoxLayout();
-    pathLayout = new QHBoxLayout();
-    samplesArea = new QHBoxLayout();
-
-    pathArea = new QHBoxLayout();
-    pathAreaRight = new QVBoxLayout();
-    pathAreaLeft = new QVBoxLayout();
-
-    areaBtnGraph = new QHBoxLayout();
-
-    labelStatsChanged = new QLabel("Total added: %1");
-    motionTypeLegend = new QLabel();
-    motionTypeLegend->setStyleSheet("font-family: monospace; font-size: 10px; color: #666;");
-    motionTypeLegend->setWordWrap(true);
-    updateMotionTypeLegend();
-
-    samplesAreaRight = new QVBoxLayout();
+    labelStatsChanged = new QLabel("Total added: --");
 
     m_pathEdit = new QLineEdit;
     m_pathEdit->setPlaceholderText("Selected file path will appear here...");
     m_pathEdit->setReadOnly(true);
 
-    samplesView = new QTableView();
-    samplesView->setModel(samplesModel);
-    samplesView->setSelectionMode(QAbstractItemView::MultiSelection);
-    samplesView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    samplesView->horizontalHeader()->setStretchLastSection(true);
-    samplesView->verticalHeader()->setVisible(false);
-    samplesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    samplesView->setAlternatingRowColors(true);
+    motionTypeLegend = new QLabel();
+    motionTypeLegend->setStyleSheet("font-size: 10px;");
+    motionTypeLegend->setWordWrap(true);
+    updateMotionTypeLegend();
 
-    motionDataView = new QTableView();
-    motionDataView->setModel(motionDataModel);
-    motionDataView->setSelectionMode(QAbstractItemView::SingleSelection);
-    motionDataView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    motionDataView->horizontalHeader()->setStretchLastSection(true);
-    motionDataView->verticalHeader()->setVisible(false);
-    motionDataView->setEditTriggers(QAbstractItemView::AllEditTriggers);
-
-    gyroGraph = new QCustomPlot();
-    accelGraph = new QCustomPlot();
-    gyroGraph->setMinimumSize(200, 200);
-    accelGraph->setMinimumSize(200, 200);
-
-    btnRefreshGraph = new QPushButton("Refresh");
-    btnCutGraph = new QPushButton("Cut");
-    btnExportToDataSet = new QPushButton("Export this");
-    btnExportAllToDataSet = new QPushButton("Export all");
-    btnDeleteFromDataSet = new QPushButton("Remove from data set pack");
-    btnSetPath = new QPushButton("Set path");
-    btnNextSample = new QPushButton("Next sample");
-    btnUndoSample = new QPushButton("Undo sample");
-    btnAddSelected = new QPushButton("Add selected");
-    btnExtractSelected = new QPushButton("Extract selected");
-    btnTrimAccept = new QPushButton("Accept");
-    btnTrimDeny = new QPushButton("Deny");
-
-    btnTrimAccept->setFixedWidth(80);
-    btnTrimDeny->setFixedWidth(80);
-    btnTrimAccept->setEnabled(false);
-    btnTrimDeny->setEnabled(false);
-    btnUndoSample->setEnabled(false);
-    btnNextSample->setEnabled(false);
-
-    gyroGraph->xAxis->setLabel("Time (s)");
-    gyroGraph->yAxis->setLabel("Gyro (°/с)");
-    accelGraph->xAxis->setLabel("Time (s)");
-    accelGraph->yAxis->setLabel("Accel (g)");
-
-    for (int i = 0; i < 3; i++){
-        gyroGraph->addGraph();
-        accelGraph->addGraph();
-    }
-
-    gyroGraph->graph(0)->setPen(QPen(Qt::red));
-    accelGraph->graph(0)->setPen(QPen(Qt::red));
-
-    gyroGraph->graph(1)->setPen(QPen(Qt::green));
-    accelGraph->graph(1)->setPen(QPen(Qt::green));
-
-    gyroGraph->graph(2)->setPen(QPen(Qt::blue));
-    accelGraph->graph(2)->setPen(QPen(Qt::blue));
-
+    setupsTableView();
+    setupButtonsOnPage();
+    setupGraph();
 
 }
 
@@ -195,19 +111,17 @@ void DataBasePage::createLayouts() {
     pathLayout->addWidget(m_pathEdit);
     pathLayout->addWidget(btnSetPath);
 
-    sampleDo->addWidget(btnExportToDataSet);
-    sampleDo->addWidget(btnExportAllToDataSet);
-    sampleDo->addWidget(btnDeleteFromDataSet);
+    exportLayout->addWidget(btnExportToDataSet);
+    exportLayout->addWidget(btnExportAllToDataSet);
+    exportLayout->addWidget(btnDeleteFromDataSet);
 
     pathAreaLeft->addLayout(pathLayout);
-    pathAreaLeft->addLayout(sampleDo);
+    pathAreaLeft->addLayout(exportLayout);
     pathAreaRight->addWidget(labelStatsChanged);
 
     pathArea->addLayout(pathAreaLeft);
     pathArea->addLayout(pathAreaRight);
     pathArea->addStretch();
-
-    samplesArea->addWidget(samplesView);
 
     graphLayout->addWidget(accelGraph);
     graphLayout->addWidget(gyroGraph);
@@ -225,21 +139,19 @@ void DataBasePage::createLayouts() {
     areaBtnGraph->addWidget(btnAddSelected);
     areaBtnGraph->addWidget(btnExtractSelected);
 
+    rightLayout->addLayout(pathArea);
+    rightLayout->addWidget(samplesView);
+    rightLayout->addLayout(graphLayout);
+    rightLayout->addLayout(areaBtnGraph);
 
+    rightLayout->addWidget(motionDataView);
 
-    rigthLayout->addLayout(pathArea);
-    rigthLayout->addLayout(samplesArea);
-    rigthLayout->addLayout(graphLayout);
-    rigthLayout->addLayout(areaBtnGraph);
-
-    rigthLayout->addWidget(motionDataView);
-
-    rigthLayout->addStretch();
+    rightLayout->addStretch();
 
 // =================== SETUP PAGE
 
     leftWidget->setLayout(leftLayout);
-    rightWidget->setLayout(rigthLayout);
+    rightWidget->setLayout(rightLayout);
 
     mainSplitter->addWidget(leftWidget);
     mainSplitter->addWidget(rightWidget);
@@ -942,7 +854,6 @@ void DataBasePage::updateStatsLabel() {
 }
 
 void DataBasePage::updateSelectedHighlight() {
-    // Force view to repaint to show selection highlight
     samplesView->viewport()->update();
 }
 
@@ -972,4 +883,113 @@ void DataBasePage::updateMotionTypeLegend(int highlightId) {
     } else {
         motionTypeLegend->setText("Motion Type: -");
     }
+}
+
+void DataBasePage::setupGraph() {
+
+    gyroGraph = new QCustomPlot();
+    accelGraph = new QCustomPlot();
+    gyroGraph->setMinimumSize(200, 200);
+    accelGraph->setMinimumSize(200, 200);
+
+    gyroGraph->xAxis->setLabel("Time (s)");
+    gyroGraph->yAxis->setLabel("Gyro (°/с)");
+    accelGraph->xAxis->setLabel("Time (s)");
+    accelGraph->yAxis->setLabel("Accel (g)");
+
+    for (int i = 0; i < 3; i++){
+        gyroGraph->addGraph();
+        accelGraph->addGraph();
+    }
+
+    gyroGraph->graph(0)->setPen(QPen(Qt::red));
+    accelGraph->graph(0)->setPen(QPen(Qt::red));
+
+    gyroGraph->graph(1)->setPen(QPen(Qt::green));
+    accelGraph->graph(1)->setPen(QPen(Qt::green));
+
+    gyroGraph->graph(2)->setPen(QPen(Qt::blue));
+    accelGraph->graph(2)->setPen(QPen(Qt::blue));
+}
+
+void DataBasePage::setupButtonsOnPage() {
+
+// =================== LEFT SIDE ===================
+
+    btnOpenDB = new QPushButton("Open DB");
+    btnDeleteDB = new QPushButton("Delete DB");
+    btnEditDB = new QPushButton("Edit DB");
+    btnCreateDB = new QPushButton("Create DB");
+    btnRefreshDB = new QPushButton("Refresh DB");
+
+    if (!m_dbManager->isInitialized()) {
+        btnOpenDB->setEnabled(false);
+        btnDeleteDB->setEnabled(false);
+        btnEditDB->setEnabled(false);
+        btnCreateDB->setEnabled(false);
+    }
+
+// =================== RIGHT SIDE ===================
+
+    btnRefreshGraph = new QPushButton("Refresh");
+    btnCutGraph = new QPushButton("Cut");
+    btnExportToDataSet = new QPushButton("Export this");
+    btnExportAllToDataSet = new QPushButton("Export all");
+    btnDeleteFromDataSet = new QPushButton("Remove from data set pack");
+    btnSetPath = new QPushButton("Set path");
+    btnNextSample = new QPushButton("Next sample");
+    btnUndoSample = new QPushButton("Undo sample");
+    btnAddSelected = new QPushButton("Add selected");
+    btnExtractSelected = new QPushButton("Extract selected");
+    btnTrimAccept = new QPushButton("Accept");
+    btnTrimDeny = new QPushButton("Deny");
+
+    btnTrimAccept->setFixedWidth(80);
+    btnTrimDeny->setFixedWidth(80);
+    btnTrimAccept->setEnabled(false);
+    btnTrimDeny->setEnabled(false);
+    btnUndoSample->setEnabled(false);
+    btnNextSample->setEnabled(false);
+}
+
+void DataBasePage::setupsTableView() {
+
+    treeView = new QTreeView();
+
+    treeModel = new QStandardItemModel();
+
+    treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    treeModel->setHorizontalHeaderLabels({"Name", "Count writes"});
+    treeView->setModel(treeModel);
+    treeView->setHeaderHidden(false);
+
+    treeView->header()->setSectionResizeMode(QHeaderView::Interactive);
+    treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    treeView->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+
+    parentItem = new QStandardItem();
+    parentItem = treeModel->invisibleRootItem();
+
+// =================== RIGHT SIDE ===================
+
+    samplesModel = new QSqlTableModel(this);
+    motionDataModel = new QSqlTableModel(this);
+
+    samplesView = new QTableView();
+    samplesView->setModel(samplesModel);
+    samplesView->setSelectionMode(QAbstractItemView::MultiSelection);
+    samplesView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    samplesView->horizontalHeader()->setStretchLastSection(true);
+    samplesView->verticalHeader()->setVisible(false);
+    samplesView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    samplesView->setAlternatingRowColors(true);
+
+    motionDataView = new QTableView();
+    motionDataView->setModel(motionDataModel);
+    motionDataView->setSelectionMode(QAbstractItemView::SingleSelection);
+    motionDataView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    motionDataView->horizontalHeader()->setStretchLastSection(true);
+    motionDataView->verticalHeader()->setVisible(false);
+    motionDataView->setEditTriggers(QAbstractItemView::AllEditTriggers);
 }

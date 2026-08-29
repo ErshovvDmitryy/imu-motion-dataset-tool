@@ -224,7 +224,7 @@ void MainWindow::connectSignals() {
     connect(motionRecorder,
             &MotionRecorder::sampleIsReady,
             connectionPage,
-            &ConnectionPage::incommingSegment);
+            &ConnectionPage::incomingSegment);
 
     connect(dataBaseManager,
             &DatabaseManager::logMessage,

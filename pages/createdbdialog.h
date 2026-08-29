@@ -1,8 +1,14 @@
+/*
+
+This class using for collected information in dialog window
+
+*/
+
 #pragma once
 
 #include <QDialog>
-#include <QStringList>
 
+class QStringList;
 class QPushButton;
 class QVBoxLayout;
 class QHBoxLayout;
@@ -34,7 +40,7 @@ private:
     QLabel *m_info1;
     QLabel *m_info2;
 
-    QTextEdit *textBrowser;
+    QTextEdit *m_textBrowser;
 
     QLineEdit *m_pathEdit;
     QLineEdit *m_fileName;
