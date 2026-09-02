@@ -429,6 +429,52 @@ QStringList DatabaseManager::getTableRowsNames(const QString &dbName, const QStr
     return columnNames;
 }
 
+QStringList DatabaseManager::getTableRows(const QString &dbName, const QString &tableName, const int id) {
+    QSqlDatabase db = openDatabase(dbName);
+
+    if (!db.isOpen()) {
+        return QStringList();
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QString("SELECT * FROM %1 WHERE id = %2").arg(tableName).arg(id));
+
+    QStringList columnList;
+
+    if (query.exec()) {
+
+        while(query.next()) {
+            columnList.append(query.value(0).toString());
+            columnList.append(query.value(1).toString());
+            columnList.append(query.value(2).toString());
+            columnList.append(query.value(3).toString());
+        }
+    }
+
+    return columnList;
+}
+
+QStringList DatabaseManager::getIdFromTable(const QString &dbName, const QString &tableName) {
+    QSqlDatabase db = openDatabase(dbName);
+
+    if (!db.isOpen()) {
+        return QStringList();
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QString("SELECT id FROM %1").arg(tableName));
+
+    QStringList idList;
+
+    if (query.exec()) {
+        while (query.next()) {
+            idList.append(query.value(0).toString());
+        }
+    }
+
+    return idList;
+}
+
 QString DatabaseManager::getDefaultDatabasePath() const {
     QString appPath = QCoreApplication::applicationDirPath();
     QDir dir(appPath);

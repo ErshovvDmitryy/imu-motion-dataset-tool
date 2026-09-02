@@ -10,6 +10,10 @@
 #include "widgets/consolewidget.h"
 #include "widgets/statusbarwidget.h"
 
+#include "pages/connectionpage.h"
+#include "pages/databasepage.h"
+#include "pages/exportcsv.h"
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
@@ -21,9 +25,6 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    delete motionRecorder;
-    serialPort->~SerialPort();
-    dataBaseManager->~DatabaseManager();
 }
 
 void MainWindow::createWidgets() {
@@ -48,13 +49,10 @@ void MainWindow::createWidgets() {
 
     datasetPage = new DataBasePage(dataBaseManager);
 
-    livePage = new QWidget;
-
-    sessionPage = new QWidget;
+    exportCSV = new ExportCSV(dataBaseManager, nullptr);
 
     stack->addWidget(connectionPage);
-    stack->addWidget(livePage);
-    stack->addWidget(sessionPage);
+    stack->addWidget(exportCSV);
     stack->addWidget(datasetPage);
 }
 
@@ -84,19 +82,11 @@ void MainWindow::connectSignals() {
     });
 
     connect(leftMenu,
-            &LeftMenuWidget::liveClicked,
+            &LeftMenuWidget::exportClicked,
             this,
             [this]()
     {
-        stack->setCurrentWidget(livePage);
-    });
-
-    connect(leftMenu,
-            &LeftMenuWidget::sessionClicked,
-            this,
-            [this]()
-    {
-        stack->setCurrentWidget(sessionPage);
+        stack->setCurrentWidget(exportCSV);
     });
 
     connect(leftMenu,

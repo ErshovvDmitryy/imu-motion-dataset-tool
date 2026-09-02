@@ -5,14 +5,14 @@
 #include "core/databasemanager.h"
 #include "core/serialport.h"
 #include "core/motionrecorder.h"
-#include "pages/connectionpage.h"
-#include "pages/databasepage.h"
 
 class QStackedWidget;
-
 class LeftMenuWidget;
 class ConsoleWidget;
 class StatusBarWidget;
+class ExportCSV;
+class ConnectionPage;
+class DataBasePage;
 
 class MainWindow : public QMainWindow
 {
@@ -39,10 +39,8 @@ private:
 
     ConnectionPage *connectionPage;
     DataBasePage *datasetPage;
+    ExportCSV *exportCSV;
     SerialPort *serialPort;
     DatabaseManager *dataBaseManager;
     MotionRecorder *motionRecorder = nullptr;
-
-    QWidget *livePage;
-    QWidget *sessionPage;
 };

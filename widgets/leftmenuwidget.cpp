@@ -12,13 +12,11 @@ LeftMenuWidget::LeftMenuWidget(QWidget *parent)
     auto *layout = new QVBoxLayout(this);
 
     connectionButton = new QPushButton("Connection");
-    liveButton = new QPushButton("Live Stream");
-    sessionButton = new QPushButton("Session");
+    exportButton = new QPushButton("Export to csv");
     datasetButton = new QPushButton("Datasets");
 
     layout->addWidget(connectionButton);
-    layout->addWidget(liveButton);
-    layout->addWidget(sessionButton);
+    layout->addWidget(exportButton);
     layout->addWidget(datasetButton);
 
     layout->addStretch();
@@ -26,11 +24,8 @@ LeftMenuWidget::LeftMenuWidget(QWidget *parent)
     connect(connectionButton,&QPushButton::clicked,
             this,&LeftMenuWidget::connectionClicked);
 
-    connect(liveButton,&QPushButton::clicked,
-            this,&LeftMenuWidget::liveClicked);
-
-    connect(sessionButton,&QPushButton::clicked,
-            this,&LeftMenuWidget::sessionClicked);
+    connect(exportButton,&QPushButton::clicked,
+            this,&LeftMenuWidget::exportClicked);
 
     connect(datasetButton,&QPushButton::clicked,
             this,&LeftMenuWidget::datasetClicked);

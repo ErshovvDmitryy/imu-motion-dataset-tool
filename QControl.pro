@@ -12,6 +12,7 @@ SOURCES += \
     pages/connectionpage.cpp \
     pages/createdbdialog.cpp \
     pages/databasepage.cpp \
+    pages/exportcsv.cpp \
     pages/opendbdialog.cpp \
     widgets/consolewidget.cpp \
     core/databasemanager.cpp \
@@ -31,6 +32,7 @@ HEADERS += \
     pages/connectionpage.h \
     pages/createdbdialog.h \
     pages/databasepage.h \
+    pages/exportcsv.h \
     pages/opendbdialog.h \
     widgets/consolewidget.h \
     core/databasemanager.h \

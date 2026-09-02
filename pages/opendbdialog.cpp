@@ -114,8 +114,6 @@ void OpenDBDialog::loadRegisteredDatabases(const QStringList &dbs) {
 }
 
 void OpenDBDialog::onSelectFromList() {
-    // Этот слот вызывается при выборе из списка
-    // Реализовано через сигнал itemSelectionChanged
 }
 
 void OpenDBDialog::onSelectCustom() {

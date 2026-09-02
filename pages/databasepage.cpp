@@ -7,24 +7,24 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
-#include <QTreeView>
-#include <QStandardItemModel>
 #include <QStringList>
 #include <QMessageBox>
 #include <QFileInfo>
 #include <QSplitter>
 #include <QLineEdit>
-#include <QTableView>
-#include <QHeaderView>
-#include <QSqlTableModel>
-#include <QSqlQuery>
-#include <QSqlRecord>
-#include <QSqlError>
 #include <QDebug>
 #include <QMouseEvent>
 #include <QPen>
 #include <QColor>
 #include <QItemSelectionModel>
+#include <QSqlRecord>
+#include <QSqlError>
+#include <QSqlTableModel>
+#include <QSqlQuery>
+#include <QTableView>
+#include <QHeaderView>
+#include <QStandardItemModel>
+#include <QTreeView>
 
 DataBasePage::DataBasePage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent)

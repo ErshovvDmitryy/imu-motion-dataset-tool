@@ -29,7 +29,9 @@ class QItemSelection;
 class DataBasePage : public QWidget
 {
     Q_OBJECT
+
 public:
+
     explicit DataBasePage(DatabaseManager *dbManager, QWidget *parent = nullptr);
 
 private:

@@ -17,9 +17,7 @@ signals:
 
     void connectionClicked();
 
-    void liveClicked();
-
-    void sessionClicked();
+    void exportClicked();
 
     void datasetClicked();
 
@@ -27,9 +25,7 @@ private:
 
     QPushButton *connectionButton;
 
-    QPushButton *liveButton;
-
-    QPushButton *sessionButton;
+    QPushButton *exportButton;
 
     QPushButton *datasetButton;
 };

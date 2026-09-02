@@ -45,6 +45,8 @@ public:
     QStringList getTableNames(const QString &dbName);
     int getTableRowCount(const QString &dbName, const QString &tableName);
     QStringList getTableRowsNames(const QString &dbName, const QString &tableName);
+    QStringList getTableRows(const QString &dbName, const QString &tableName, const int id);
+    QStringList getIdFromTable(const QString &dbName, const QString &tableName);
 
     bool insertGesture(const QString &dbName,
                        MotionType type,
