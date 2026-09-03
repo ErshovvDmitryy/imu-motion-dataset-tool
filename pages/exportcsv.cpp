@@ -3,6 +3,7 @@
 #include "core/databasemanager.h"
 #include "models/MotionType.h"
 
+#include <QDir>
 #include <QDebug>
 #include <QLabel>
 #include <QTextEdit>
@@ -12,6 +13,8 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
+#include <QTextStream>
+#include <QSet>
 
 #include <QItemSelectionModel>
 #include <QSqlRecord>
@@ -27,6 +30,7 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QStandardPaths>
+#include <QCheckBox>
 
 
 ExportCSV::ExportCSV(DatabaseManager *dbManager, QWidget *parent)
@@ -94,13 +98,25 @@ void ExportCSV::createWidgets() {
     m_windowSize = new QLineEdit();
     m_biasWindow = new QLineEdit();
     m_exportPath = new QLineEdit();
+    m_exportPath->setPlaceholderText("Enter directory for export dataset");
     m_exportFloderName = new QLineEdit();
+    m_exportFloderName->setPlaceholderText("Enter name for root floder");
     m_descriptionBlock = new QTextEdit();
+    m_descriptionBlock->setPlaceholderText("Write info about export dataset. \n This information will be placed in the root section under the name info.txt.");
+
     m_descriptionBlock->setMaximumHeight(250);
 
     m_btnExportPath = new QPushButton("Path");
-    btnExport = new QPushButton("Export");
+    m_btnExport = new QPushButton("Export");
     m_btnRefreshInfo = new QPushButton("Refresh export info");
+
+    m_normalize = new QCheckBox("Normalize to [-1, 1]");
+    m_maxAccel = new QLineEdit("4.0");
+    m_maxAccel->setToolTip("Max accel range (g): ±4g → 4.0");
+    m_maxAccel->setMaximumWidth(80);
+    m_maxGyro = new QLineEdit("1000.0");
+    m_maxGyro->setToolTip("Max gyro range (deg/s): ±1000 → 1000.0");
+    m_maxGyro->setMaximumWidth(80);
 
     topWidget = new QGroupBox("Export settings");
     QGridLayout *topGridLayout = new QGridLayout(topWidget);
@@ -117,7 +133,12 @@ void ExportCSV::createWidgets() {
     topGridLayout->addWidget(m_exportPath, 4, 1);
     topGridLayout->addWidget(m_btnExportPath, 4, 2);
     topGridLayout->addWidget(m_btnRefreshInfo, 5, 1);
-    topGridLayout->addWidget(btnExport, 5, 2);
+    topGridLayout->addWidget(m_btnExport, 5, 2);
+    topGridLayout->addWidget(m_normalize, 6, 0);
+    topGridLayout->addWidget(new QLabel("Max accel (g):"), 6, 1);
+    topGridLayout->addWidget(m_maxAccel, 6, 2);
+    topGridLayout->addWidget(new QLabel("Max gyro (°/s):"), 7, 1);
+    topGridLayout->addWidget(m_maxGyro, 7, 2);
 
     m_downInfo = new QTextEdit();
 
@@ -183,6 +204,9 @@ void ExportCSV::connectSignals() {
 
     connect(m_btnRefreshInfo, &QPushButton::clicked,
             this, &ExportCSV::onRefreshInfoClicked);
+
+    connect(m_btnExport, &QPushButton::clicked,
+            this, &ExportCSV::onExportClicked);
 
     connect(treeModel, &QStandardItemModel::itemChanged,
             this, &ExportCSV::onItemCheckChanged);
@@ -419,7 +443,7 @@ void ExportCSV::openDBDialog() {
 void ExportCSV::onEditPathClicked() {
     QString dirPath = QFileDialog::getExistingDirectory(
             this,
-            tr("Select folder for database"),
+            tr("Select root for database"),
             QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
             QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
         );
@@ -441,7 +465,7 @@ void ExportCSV::onRefreshInfoClicked() {
     QString pathExport = m_exportPath->text();
 
     if ( windowSize == 0 && biasSize == 0 && descriptionUser.isEmpty() && floderName.isEmpty() && pathExport.isEmpty()) {
-        return;
+        qDebug() << "Not full info";
     }
 
     m_downInfo->setHtml(descriptionUser);
@@ -450,5 +474,180 @@ void ExportCSV::onRefreshInfoClicked() {
     m_downInfo->append(QString("Bias window size: %1").arg(biasSize));
     m_downInfo->append(QString("Export path: %1/%2/").arg(pathExport).arg(floderName));
 
-    // leter auto genered info by groups motions
+    if (m_normalize->isChecked()) {
+        m_downInfo->append(QString("Normalize: ON (±%1g, ±%2°/s → [-1, 1])")
+            .arg(m_maxAccel->text()).arg(m_maxGyro->text()));
+    } else {
+        m_downInfo->append(QString("Normalize: OFF"));
+    }
+
+    QMap<int, int> gestureCount;
+    QMap<int, int> totalSamplesPerType;
+
+    for (const SelectedRecord &record : m_selectedRecords) {
+        QStringList list = m_dbManager->getTableRows(record.dbName, record.tableName, record.id);
+        if (list.isEmpty()) continue;
+
+        int typeMotion = list.at(1).toInt();
+        gestureCount[typeMotion]++;
+
+        QVector<QVector<float>> samples = m_dbManager->getGestureSamples(record.dbName, record.id);
+        totalSamplesPerType[typeMotion] += samples.size();
+    }
+
+    m_downInfo->append(QString(""));
+    m_downInfo->append(QString("--- Gesture breakdown ---"));
+
+    for (auto it = gestureCount.constBegin(); it != gestureCount.constEnd(); ++it) {
+        int type = it.key();
+        int count = it.value();
+        int totalSamples = totalSamplesPerType[type];
+
+        int windowsPerGesture = 0;
+        if (windowSize > 0 && totalSamples / count >= windowSize) {
+            int samplesPerGesture = totalSamples / count;
+            windowsPerGesture = (samplesPerGesture - windowSize) / biasSize + 1;
+        }
+
+        m_downInfo->append(QString("%1: %2 gestures, %3 windows each. Total samples: %4")
+            .arg(motionTypeToString(type))
+            .arg(count)
+            .arg(windowsPerGesture).arg(totalSamples));
+    }
 }
+
+void ExportCSV::onExportClicked() {
+
+    onRefreshInfoClicked();
+    resetTypeCounter();
+
+    const int windowSize = m_windowSize->text().toInt();
+    const int windowBias = m_biasWindow->text().toInt();
+
+    QString msg = QString("Export db + i more info "
+                          "\n Windows size: %1\n "
+                          "Window bias: %2\n").arg(windowSize).arg(windowBias);
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Export db",
+        msg,
+        QMessageBox::Save | QMessageBox::Cancel);
+
+    if (reply == QMessageBox::Save) {
+
+        QString path = m_exportPath->text();
+        createFloders(path, m_exportFloderName->text());
+        path.append("/");
+        path.append(m_exportFloderName->text());
+
+        QSet<int> uniqueMotionTypes;
+        for (const SelectedRecord &record : m_selectedRecords) {
+
+            QStringList list = m_dbManager->getTableRows(record.dbName, record.tableName, record.id);
+
+            if (!list.isEmpty()) {
+                uniqueMotionTypes.insert(list.at(1).toInt());
+            }
+        }
+
+        for (int motionType : uniqueMotionTypes) {
+            createFloders(path, motionTypeToString(motionType));
+        }
+
+        createReport(path, windowSize, windowBias);
+        createReportMassage(path, m_downInfo->toPlainText());
+
+    }
+}
+
+void ExportCSV::createFloders(const QString path, const QString nameFloder) {
+
+    QDir dir;
+
+    QString workPath = path;
+
+    if (QDir(path).exists()){
+        workPath.append("/");
+        workPath.append(nameFloder);
+        if(dir.mkpath(workPath)) {
+        }
+    }
+
+}
+
+void ExportCSV::createReport(const QString path, int windowSize, int windowBias) {
+
+    for (const SelectedRecord &record : m_selectedRecords) {
+
+        QStringList list = m_dbManager->getTableRows(record.dbName, record.tableName, record.id);
+        int typeMotion = list.at(1).toInt();
+        QString typePath = path;
+        typePath.append("/");
+        typePath.append(motionTypeToString(typeMotion));
+
+        createCVSFile(typePath, typeMotion, record, windowSize, windowBias);
+
+    }
+}
+
+void ExportCSV::createCVSFile(const QString path, int typeMotion, const SelectedRecord &record,
+                              int windowSize, int windowBias) {
+
+    QVector<QVector<float>> samples = m_dbManager->getGestureSamples(record.dbName, record.id);
+    QVector<QVector<QVector<float>>> windows = sliceWindows(samples, windowSize, windowBias);
+
+    bool doNormalize = m_normalize->isChecked();
+    float maxAccel = m_maxAccel->text().toFloat();
+    float maxGyro = m_maxGyro->text().toFloat();
+
+    for (int i = 0; i < windows.size(); i++) {
+
+        int fileIndex = typeCounters[typeMotion]++;
+
+        QString filePath = path;
+        filePath.append("/");
+        filePath.append(motionTypeToString(typeMotion));
+        filePath.append(QString("_%1").arg(fileIndex));
+        filePath.append(QString(".csv"));
+
+        QFile file(filePath);
+
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&file);
+            out.setCodec("UTF-8");
+
+            const QVector<QVector<float>> &win = windows[i];
+            for (const QVector<float> &sample : win) {
+                if (doNormalize) {
+                    out << sample[0] / maxAccel << "," << sample[1] / maxAccel << "," << sample[2] / maxAccel << ","
+                        << sample[3] / maxGyro << "," << sample[4] / maxGyro << "," << sample[5] / maxGyro << "\n";
+                } else {
+                    out << sample[0] << "," << sample[1] << "," << sample[2] << ","
+                        << sample[3] << "," << sample[4] << "," << sample[5] << "\n";
+                }
+            }
+
+            file.close();
+        }
+    }
+}
+
+void ExportCSV::createReportMassage(QString filePath, const QString reportText) {
+    QString textToWrite = reportText;
+    QFile file(filePath.append("/report.txt"));
+
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out.setCodec("UTF-8");
+
+        out << reportText;
+
+        file.close();
+    }
+    else {
+        qDebug() << file.errorString();
+    }
+
+}
+
+void ExportCSV::resetTypeCounter() { typeCounters.clear(); }

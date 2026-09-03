@@ -52,6 +52,9 @@ public:
                        MotionType type,
                        const QVector<MotionSample> &samples,
                        uint16_t crc16);
+
+    QVector<QVector<float>> getGestureSamples(const QString &dbName,const int motionId);
+
     bool updateGestureMotionType(const QString &dbName, int sampleId, MotionType type);
     bool isExportDatabase(const QString &datasetDbName) const;
 

@@ -78,7 +78,6 @@ private:
     void onDeleteFromDataSetClicked();
     void updateSelectedHighlight();
     void updateStatsLabel();
-    QString motionTypeToString(int motionTypeId) const;
     void onTreeViewDoubleClicked(const QModelIndex &index);
     void updateMotionTypeLegend(int highlightId = -1);
 

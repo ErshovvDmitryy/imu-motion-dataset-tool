@@ -749,6 +749,45 @@ bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, cons
     return true;
 }
 
+QVector<QVector<float>> DatabaseManager::getGestureSamples(const QString &dbName, const int motionId) {
+
+    QSqlDatabase db = openDatabase(dbName);
+
+    QVector<QVector<float>> m_motionData;
+
+    if (!db.isOpen()) {
+    }
+
+    QSqlQuery query(db);
+
+    query.prepare(
+            "SELECT ax, ay, az, gx, gy, gz "
+            "FROM motion_data "
+            "WHERE sample_id = ? "
+            "ORDER BY sample_index ASC"
+        );
+    query.addBindValue(motionId);
+
+    QStringList columnList;
+
+    if (query.exec()) {
+
+        while(query.next()) {
+            QVector<float> motionSample;
+            motionSample.push_back(query.value(0).toFloat());
+            motionSample.push_back(query.value(1).toFloat());
+            motionSample.push_back(query.value(2).toFloat());
+            motionSample.push_back(query.value(3).toFloat());
+            motionSample.push_back(query.value(4).toFloat());
+            motionSample.push_back(query.value(5).toFloat());
+
+            m_motionData.append(motionSample);
+        }
+    }
+
+    return m_motionData;
+}
+
 bool DatabaseManager::updateGestureMotionType(const QString &dbName, int sampleId, MotionType type) {
     QSqlDatabase db = openDatabase(dbName);
     if (!db.isOpen())

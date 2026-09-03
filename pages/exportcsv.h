@@ -8,6 +8,8 @@
 #include <QList>
 #include <QMap>
 
+class QCheckBox;
+
 class QLabel;
 class QGroupBox;
 class QLineEdit;
@@ -55,6 +57,17 @@ private:
 
     void onEditPathClicked();
     void onRefreshInfoClicked();
+    void onExportClicked();
+
+    void createFloders(const QString path, const QString nameFloder);
+
+    void createReportMassage(QString filePath, const QString reportText);
+
+    void createReport(const QString path, int windowSize, int windowBias);
+    void createCVSFile(const QString path, int typeMotion, const SelectedRecord &record,
+                       int windowSize, int windowBias);
+
+    void resetTypeCounter();
 
     QStandardItem* findSelectedTableItem() const;
 
@@ -89,7 +102,7 @@ private:
 // ====================== EXPORT SETTINGS +++++++++++++++++++++
 
     QPushButton *m_btnExportPath;
-    QPushButton *btnExport;
+    QPushButton *m_btnExport;
     QPushButton *m_btnRefreshInfo;
 
     QSplitter *rightSplitter;
@@ -100,6 +113,10 @@ private:
     QLineEdit *m_exportPath;
     QLineEdit *m_exportFloderName;
 
+    QCheckBox *m_normalize;
+    QLineEdit *m_maxAccel;
+    QLineEdit *m_maxGyro;
+
     QTextEdit *m_descriptionBlock;
 
     QGroupBox *downWidget;
@@ -109,4 +126,5 @@ private:
     DatabaseManager *m_dbManager;
     QString m_currentDatabase;
 
+    QMap<int, int> typeCounters;
 };
