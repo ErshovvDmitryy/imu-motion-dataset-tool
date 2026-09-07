@@ -230,6 +230,7 @@ void DataBasePage::connectSignals() {
     connect(gyroGraph, &QCustomPlot::mouseRelease,
             this, [this](QMouseEvent *e) { onGraphMouseRelease(e, gyroGraph); });
 
+
     connectSampleSelectionHandler();
 }
 
@@ -259,7 +260,7 @@ void DataBasePage::openDBDialog()
 {
     QStringList registeredDbs = m_dbManager->getRegisteredDatabases();
 
-    OpenDBDialog dialog(registeredDbs, this);
+    OpenDBDialog dialog(registeredDbs);
 
     if (dialog.exec() == QDialog::Accepted) {
         QString selected = dialog.getSelectedDatabase();
@@ -305,7 +306,12 @@ void DataBasePage::createDBDialog()
 }
 
 void DataBasePage::refreshDatabaseList() {
-    treeModel->removeRows(0, treeModel->rowCount());
+
+    treeModel->blockSignals(true);
+
+    treeModel->clear();
+    treeModel->setHorizontalHeaderLabels({"Name", "Count writes"});
+    treeView->reset();
 
     QStringList databases = m_dbManager->getRegisteredDatabases();
 
@@ -343,6 +349,9 @@ void DataBasePage::refreshDatabaseList() {
 
         countItem->setText(QString::number(totalCount));
     }
+
+    treeView->update();
+    treeModel->blockSignals(false);
 }
 
 void DataBasePage::onTreeViewDoubleClicked(const QModelIndex &index) {
@@ -365,6 +374,8 @@ void DataBasePage::onTreeViewDoubleClicked(const QModelIndex &index) {
 void DataBasePage::refreshSamplesModel(const QString &dbName, const QString &) {
 
     if (dbName.isEmpty()) return;
+
+    samplesModel->clear();
 
     m_currentDatabase = dbName;
 

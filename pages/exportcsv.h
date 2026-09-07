@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pages/opendbdialog.h"
+#include "models/loglevel.h"
 
 #include <QObject>
 #include <QWidget>
@@ -89,7 +90,7 @@ private:
     QStandardItem *parentItem;
     QStandardItemModel *treeModel;
 
-    QPushButton *updateDB;
+    QPushButton *m_updateDB;
     QPushButton *setCustomDB;
 
     QPushButton *m_btnSelectAllFromParent;
@@ -127,4 +128,7 @@ private:
     QString m_currentDatabase;
 
     QMap<int, int> typeCounters;
+
+signals:
+    void logMessage(LogLevel level, const QString &text);
 };

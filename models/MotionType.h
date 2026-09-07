@@ -47,7 +47,7 @@ inline QVector<QVector<QVector<float>>> sliceWindows(
     const QVector<QVector<float>> &data,
     int windowSize,
     int windowBias,
-    float minRemainingRatio = 0.4f)
+    float minRemainingRatio = 0.1f)
 {
     QVector<QVector<QVector<float>>> windows;
 

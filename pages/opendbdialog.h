@@ -15,17 +15,16 @@ class OpenDBDialog: public QDialog
     Q_OBJECT
 
 public:
-    explicit OpenDBDialog(const QStringList &registeredDbs,
-                                QWidget *parent = nullptr);
+    explicit OpenDBDialog( const QStringList &registeredDbs );
 
     QString getSelectedDatabase() const;
 
     bool isCustomPath() const { return m_isCustomPath; }
 
 private slots:
-    void onSelectFromList();
     void onSelectCustom();
     void onItemDoubleClicked();
+    void onItemClicked();
     void onOkClicked();
     void onCancelClicked();
 

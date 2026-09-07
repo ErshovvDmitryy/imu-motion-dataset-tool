@@ -15,6 +15,7 @@
 #include <QGridLayout>
 #include <QTextStream>
 #include <QSet>
+#include <QList>
 
 #include <QItemSelectionModel>
 #include <QSqlRecord>
@@ -64,7 +65,7 @@ void ExportCSV::createWidgets() {
     treeView = new QTreeView;
     treeModel = new QStandardItemModel;
 
-    updateDB = new QPushButton("Refresh");
+    m_updateDB = new QPushButton("Refresh");
     setCustomDB = new QPushButton("Open db");
 
     m_btnSelectAllFromParent = new QPushButton("Select all in table");
@@ -97,10 +98,24 @@ void ExportCSV::createWidgets() {
 
     m_windowSize = new QLineEdit();
     m_biasWindow = new QLineEdit();
+    QRegularExpression numberRx("[0-9]+");
+    QValidator *numberValidator = new QRegularExpressionValidator(numberRx, this);
+    m_windowSize->setValidator(numberValidator);
+    m_biasWindow->setValidator(numberValidator);
+
     m_exportPath = new QLineEdit();
     m_exportPath->setPlaceholderText("Enter directory for export dataset");
+    QRegularExpression pathRx("[a-zA-Z0-9а-яА-Я.:_ /\\\\-]+");
+    QValidator *pathValidator = new QRegularExpressionValidator(pathRx, this);
+    m_exportPath->setValidator(pathValidator);
+
     m_exportFloderName = new QLineEdit();
     m_exportFloderName->setPlaceholderText("Enter name for root floder");
+    QRegularExpression fileFloderRx("[a-zA-Z0-9а-яА-Я._ -]+");
+    QValidator *fileFloderValidator = new QRegularExpressionValidator(fileFloderRx, this);
+    m_exportFloderName->setValidator(fileFloderValidator);
+
+
     m_descriptionBlock = new QTextEdit();
     m_descriptionBlock->setPlaceholderText("Write info about export dataset. \n This information will be placed in the root section under the name info.txt.");
 
@@ -165,7 +180,7 @@ void ExportCSV::createLayouts() {
     statLayout->addStretch();
 
     leftLayout->addWidget(setCustomDB);
-    leftLayout->addWidget(updateDB);
+    leftLayout->addWidget(m_updateDB);
     leftLayout->addWidget(treeView, 1);
     leftLayout->addLayout(selectButtons);
     leftLayout->addLayout(statLayout);
@@ -190,7 +205,7 @@ void ExportCSV::connectSignals() {
     connect(m_btnSelectAllFromParent, &QPushButton::clicked,
             this, &ExportCSV::selectAllInTable);
 
-    connect(updateDB, &QPushButton::clicked,
+    connect(m_updateDB, &QPushButton::clicked,
             this, &ExportCSV::refreshDatabaseList);
 
     connect(setCustomDB, &QPushButton::clicked,
@@ -215,7 +230,11 @@ void ExportCSV::connectSignals() {
 
 void ExportCSV::refreshDatabaseList() {
     treeModel->blockSignals(true);
-    treeModel->removeRows(0, treeModel->rowCount());
+
+    treeModel->clear();
+    treeModel->setHorizontalHeaderLabels({"Name", "Count writes"});
+    treeView->reset();
+
     m_selectedRecords.clear();
 
     QStringList databases = m_dbManager->getRegisteredDatabases();
@@ -254,9 +273,9 @@ void ExportCSV::refreshDatabaseList() {
 
                 if (rowData.isEmpty()) continue;
 
-                QString displayText = QString("ID:%1 | motion_type:%2 | sample_count:%3 | crc16:%4")
+                QString displayText = QString("ID:%1 | %2 | sample_count:%3 | crc16:%4")
                     .arg(rowData.value(0, ""))
-                    .arg(rowData.value(1, ""))
+                    .arg(motionTypeToString(rowData.value(1).toInt()))
                     .arg(rowData.value(2, ""))
                     .arg(rowData.value(3, ""));
 
@@ -274,6 +293,8 @@ void ExportCSV::refreshDatabaseList() {
 
         dbCountItem->setText(QString::number(dbTotalCount));
     }
+
+    treeView->update();
     treeModel->blockSignals(false);
     updateStatLabel();
 }
@@ -384,6 +405,7 @@ void ExportCSV::rebuildSelectedRecords() {
         }
     }
 }
+
 QStandardItem* ExportCSV::findSelectedTableItem() const {
     QModelIndexList selected = treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return nullptr;
@@ -412,7 +434,7 @@ void ExportCSV::setupInfo() {
 void ExportCSV::openDBDialog() {
 
     QStringList registeredDbs = m_dbManager->getRegisteredDatabases();
-    OpenDBDialog dialog(registeredDbs, this);
+    OpenDBDialog dialog(registeredDbs);
 
     if (dialog.exec() == QDialog::Accepted) {
         QString selected = dialog.getSelectedDatabase();
@@ -464,9 +486,12 @@ void ExportCSV::onRefreshInfoClicked() {
     QString floderName = m_exportFloderName->text();
     QString pathExport = m_exportPath->text();
 
-    if ( windowSize == 0 && biasSize == 0 && descriptionUser.isEmpty() && floderName.isEmpty() && pathExport.isEmpty()) {
-        qDebug() << "Not full info";
+    if ( windowSize == 0 || biasSize == 0 || descriptionUser.isEmpty() || floderName.isEmpty() || pathExport.isEmpty()) {
+        logMessage(LogLevel::Warning, "Fill all data fields.");
     }
+    /*if (typeCounters.isEmpty()){
+        logMessage(LogLevel::Warning, "Select files for generate dataset.");
+    }*/
 
     m_downInfo->setHtml(descriptionUser);
     m_downInfo->append(QString(""));
@@ -518,27 +543,49 @@ void ExportCSV::onRefreshInfoClicked() {
 
 void ExportCSV::onExportClicked() {
 
+    const int windowSize = m_windowSize->text().toInt();
+    const int windowBias = m_biasWindow->text().toInt();
+    const QString path = m_exportPath->text();
+    const QString name = m_exportFloderName->text();
+
+    if (path.isEmpty() || name.isEmpty()){
+        logMessage(LogLevel::Error, QString("Parameters not specified. \n "
+                                            "Export path: %1 \n"
+                                            "Floder name: %2").arg(path).arg(name));
+        return;
+    }
+
+
+    if (windowSize <= 0 || windowBias <= 0 || m_windowSize->text().isEmpty() || m_biasWindow->text().isEmpty()) {
+        logMessage(LogLevel::Error, QString("Parameters not specified. \n "
+                                            "Window size: %1 \n"
+                                            "Bias window: %2").arg(windowSize).arg(windowBias));
+        return;
+    }
+
+    /*if (typeCounters.isEmpty()) {
+        logMessage(LogLevel::Error, "Select elements to generate the dataset.");
+        return;
+    }*/
+
     onRefreshInfoClicked();
     resetTypeCounter();
 
-    const int windowSize = m_windowSize->text().toInt();
-    const int windowBias = m_biasWindow->text().toInt();
-
-    QString msg = QString("Export db + i more info "
+    QString msg = QString("Export dataset + i more info "
                           "\n Windows size: %1\n "
                           "Window bias: %2\n").arg(windowSize).arg(windowBias);
     QMessageBox::StandardButton reply = QMessageBox::question(
         this,
-        "Export db",
+        "Export dataset",
         msg,
         QMessageBox::Save | QMessageBox::Cancel);
 
     if (reply == QMessageBox::Save) {
 
-        QString path = m_exportPath->text();
         createFloders(path, m_exportFloderName->text());
-        path.append("/");
-        path.append(m_exportFloderName->text());
+        QString editPath = m_exportPath->text();
+        editPath.append("/");
+        editPath.append(m_exportFloderName->text());
 
         QSet<int> uniqueMotionTypes;
         for (const SelectedRecord &record : m_selectedRecords) {
@@ -551,26 +598,54 @@ void ExportCSV::onExportClicked() {
         }
 
         for (int motionType : uniqueMotionTypes) {
-            createFloders(path, motionTypeToString(motionType));
+            createFloders(editPath, motionTypeToString(motionType));
         }
 
-        createReport(path, windowSize, windowBias);
-        createReportMassage(path, m_downInfo->toPlainText());
+        createReport(editPath, windowSize, windowBias);
+        createReportMassage(editPath, m_downInfo->toPlainText());
 
     }
 }
 
-void ExportCSV::createFloders(const QString path, const QString nameFloder) {
+void ExportCSV::createFloders(const QString path, const QString nameFolder) {
 
-    QDir dir;
+    if (path.length() + nameFolder.length() + 1 > 4096) {
+        logMessage(LogLevel::Error, "Path is too long");
+        return;
+    }
 
-    QString workPath = path;
+    QRegularExpression invalidChars("[.?<>:\"/\\|?*]");
 
-    if (QDir(path).exists()){
-        workPath.append("/");
-        workPath.append(nameFloder);
-        if(dir.mkpath(workPath)) {
-        }
+    if (nameFolder.contains(invalidChars)) {
+        logMessage(LogLevel::Error, "Folder name contains invalid characters");
+        return;
+    }
+
+    QString workPath = QDir::cleanPath(path);
+
+    QDir dir(workPath);
+
+    if (!dir.exists()) {
+        logMessage(LogLevel::Error, QString("Parent directory does not exist: %1").arg(workPath));
+        return;
+    }
+
+    if (!dir.isReadable()) {
+        logMessage(LogLevel::Error, QString("Directory is not readable: %1").arg(workPath));
+        return;
+    }
+
+    QString fullPath = QDir(workPath).filePath(nameFolder);
+
+    QFileInfo fileInfo(fullPath);
+    if (fileInfo.exists() && fileInfo.isFile()) {
+        logMessage(LogLevel::Error, QString("Path points to a file, not a directory:: %1").arg(fullPath));
+        return;
+    }
+
+    QDir workDir(workPath);
+    if (workDir.mkpath(nameFolder)){
+
     }
 
 }

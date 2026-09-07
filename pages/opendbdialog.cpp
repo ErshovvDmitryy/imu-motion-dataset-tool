@@ -11,10 +11,8 @@
 #include <QStandardPaths>
 
 
-OpenDBDialog::OpenDBDialog(const QStringList &registeredDbs,
-                                       QWidget *parent)
-    : QDialog(parent)
-    , m_registeredDbs(registeredDbs)
+OpenDBDialog::OpenDBDialog(const QStringList &registeredDbs )
+    : m_registeredDbs(registeredDbs)
     , m_selectedDatabase(QString())
     , m_isCustomPath(false)
 {
@@ -53,12 +51,14 @@ void OpenDBDialog::setupUI() {
     m_mainLayout->addLayout(m_topLayout);
 
     QHBoxLayout *pathLayout = new QHBoxLayout();
-    QLabel *pathLabel = new QLabel("Path:");
+    QLabel *pathLabel = new QLabel("Object:");
     pathLayout->addWidget(pathLabel);
 
     m_pathEdit = new QLineEdit();
     m_pathEdit->setPlaceholderText("Selected file path will appear here...");
-    m_pathEdit->setReadOnly(true);
+    QRegularExpression pathRx("[a-zA-Z0-9а-яА-Я.:_ /\\\\-]+");
+    QValidator *pathValidator = new QRegularExpressionValidator(pathRx, this);
+    m_pathEdit->setValidator(pathValidator);
     pathLayout->addWidget(m_pathEdit);
 
     m_mainLayout->addLayout(pathLayout);
@@ -77,6 +77,10 @@ void OpenDBDialog::setupUI() {
 
     connect(m_dbList, &QListWidget::itemDoubleClicked,
             this, &OpenDBDialog::onItemDoubleClicked);
+
+    connect(m_dbList, &QListWidget::itemClicked,
+            this, &OpenDBDialog::onItemClicked);
+
     connect(m_dbList, &QListWidget::itemSelectionChanged,
             [this]() {
                 if (m_dbList->currentItem()) {
@@ -113,9 +117,6 @@ void OpenDBDialog::loadRegisteredDatabases(const QStringList &dbs) {
     }
 }
 
-void OpenDBDialog::onSelectFromList() {
-}
-
 void OpenDBDialog::onSelectCustom() {
     QString filePath = QFileDialog::getOpenFileName(
         this,
@@ -135,6 +136,8 @@ void OpenDBDialog::onSelectCustom() {
     m_okBtn->setEnabled(true);
     m_isCustomPath = true;
     m_selectedDatabase = filePath;
+
+    m_pathEdit->setText(filePath);
 }
 
 void OpenDBDialog::onItemDoubleClicked() {
@@ -142,6 +145,13 @@ void OpenDBDialog::onItemDoubleClicked() {
         m_selectedDatabase = m_dbList->currentItem()->text();
         m_isCustomPath = false;
         accept();
+    }
+}
+
+void OpenDBDialog::onItemClicked() {
+    if (m_dbList->currentItem()) {
+        m_selectedDatabase = m_dbList->currentItem()->text();
+        m_pathEdit->setText(m_selectedDatabase);
     }
 }
 

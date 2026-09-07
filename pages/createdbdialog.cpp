@@ -10,6 +10,7 @@
 #include <QStandardPaths>
 #include <QDebug>
 #include <QStringList>
+#include <QRegularExpressionValidator>
 
 CreateDBDialog::CreateDBDialog(QWidget *parent) {
     setupUI();
@@ -57,7 +58,7 @@ void CreateDBDialog::onEditPathClicked() {
 
 void CreateDBDialog::setupUI() {
 
-    setWindowTitle("Exec db");
+    setWindowTitle("Create database");
     setMinimumSize(400, 250);
     setModal(true);
 
@@ -66,15 +67,22 @@ void CreateDBDialog::setupUI() {
     m_setPathLayout = new QHBoxLayout;
 
     m_textBrowser = new QTextEdit;
-    m_textBrowser->setPlaceholderText(" description ");
+    m_textBrowser->setPlaceholderText("Description: ");
 
-    m_info1 = new QLabel("Write description for DB");
+    m_info1 = new QLabel("Write description for database");
     m_info2 = new QLabel("Set file parametrs");
 
     m_pathEdit = new QLineEdit;
-    m_pathEdit->setPlaceholderText("set file path");
+    m_pathEdit->setPlaceholderText("Set file path");
+    QRegularExpression pathRx("[a-zA-Z0-9а-яА-Я.:_ /\\\\-]+");
+    QValidator *pathValidator = new QRegularExpressionValidator(pathRx, this);
+    m_pathEdit->setValidator(pathValidator);
+
     m_fileName = new QLineEdit;
-    m_fileName->setPlaceholderText("set file name");
+    m_fileName->setPlaceholderText("Set file name");
+    QRegularExpression fileNameRx("[a-zA-Z0-9а-яА-Я._ -]+");
+    QValidator *fileNameValidator = new QRegularExpressionValidator(fileNameRx, this);
+    m_fileName->setValidator(fileNameValidator);
 
     m_btnOk = new QPushButton("Ok");
     m_btnCancel = new QPushButton("Cancel");

@@ -221,4 +221,9 @@ void MainWindow::connectSignals() {
             console,
             &ConsoleWidget::logMessage);
 
+    connect(exportCSV,
+            &ExportCSV::logMessage,
+            console,
+            &ConsoleWidget::logMessage);
+
 }
