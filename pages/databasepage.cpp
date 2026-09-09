@@ -131,6 +131,8 @@ void DataBasePage::createLayouts() {
     areaBtnGraph->addWidget(motionTypeLegend);
     areaBtnGraph->addWidget(btnTrimAccept);
     areaBtnGraph->addWidget(btnTrimDeny);
+    areaBtnGraph->addWidget(btnFlagAccept);
+    areaBtnGraph->addWidget(btnFlagDeny);
     areaBtnGraph->addStretch();
 
     areaBtnGraph->addWidget(btnUndoSample);
@@ -215,6 +217,8 @@ void DataBasePage::connectSignals() {
     connect(btnCutGraph, &QPushButton::clicked, this, &DataBasePage::onTrimButtonClicked);
     connect(btnTrimAccept, &QPushButton::clicked, this, &DataBasePage::onTrimAccept);
     connect(btnTrimDeny, &QPushButton::clicked, this, &DataBasePage::onTrimDeny);
+    connect(btnFlagAccept, &QPushButton::clicked, this, &DataBasePage::onFlagAccept);
+    connect(btnFlagDeny, &QPushButton::clicked, this, &DataBasePage::onFlagDeny);
 
     connect(accelGraph, &QCustomPlot::mousePress,
             this, [this](QMouseEvent *e) { onGraphMousePress(e, accelGraph); });
@@ -406,6 +410,11 @@ void DataBasePage::loadSampleToGraphs(int sampleId) {
     QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
     if (!db.isOpen()) return;
 
+    clearFlagSeparators();
+    m_flagStartSec = m_flagEndSec = -1;
+    btnFlagAccept->setEnabled(false);
+    btnFlagDeny->setEnabled(false);
+
     QSqlQuery query(db);
     query.prepare("SELECT sample_index, ax, ay, az, gx, gy, gz, timestamp FROM motion_data "
                   "WHERE sample_id = :sample_id ORDER BY sample_index");
@@ -425,9 +434,11 @@ void DataBasePage::loadSampleToGraphs(int sampleId) {
     bool first = true;
     int count = 0;
     double relTime = 0;
+    QVector<double> timestamps;
 
     while (query.next()) {
         double timeSec = query.value("timestamp").toLongLong() / 1000000.0;
+        timestamps.append(timeSec);
         if (first) {
             firstTime = timeSec;
             first = false;
@@ -457,9 +468,6 @@ void DataBasePage::loadSampleToGraphs(int sampleId) {
         gyroGraph->graph(i)->rescaleAxes(true);
     }
 
-    //accelGraph->xAxis->setRange(0, count > 0 ? (relTime > 0 ? relTime : 5) : 5);
-    //gyroGraph->xAxis->setRange(0, count > 0 ? (relTime > 0 ? relTime : 5) : 5);
-
     accelGraph->xAxis->setRange(0, relTime );
     gyroGraph->xAxis->setRange(0, relTime);
 
@@ -470,11 +478,26 @@ void DataBasePage::loadSampleToGraphs(int sampleId) {
     gyroGraph->replot(QCustomPlot::rpQueuedReplot);
 
     QSqlQuery typeQuery(db);
-    typeQuery.prepare("SELECT motion_type FROM samples WHERE id = :id");
+    typeQuery.prepare("SELECT motion_type, start_flag, end_flag FROM samples WHERE id = :id");
     typeQuery.bindValue(":id", sampleId);
     if (typeQuery.exec() && typeQuery.next()) {
         int motionTypeId = typeQuery.value(0).toInt();
         updateMotionTypeLegend(motionTypeId);
+
+        int startFlag = typeQuery.value(1).toInt();
+        int endFlag = typeQuery.value(2).toInt();
+
+        if ((startFlag != -1 || endFlag != -1) && !timestamps.isEmpty()) {
+            double firstT = timestamps.first();
+            if (startFlag >= 0 && startFlag < timestamps.size()) {
+                m_flagStartSec = timestamps[startFlag] - firstT;
+                addFlagLine(m_flagStartSec, true);
+            }
+            if (endFlag >= 0 && endFlag < timestamps.size()) {
+                m_flagEndSec = timestamps[endFlag] - firstT;
+                addFlagLine(m_flagEndSec, false);
+            }
+        }
     }
 }
 
@@ -541,7 +564,7 @@ void DataBasePage::onTrimButtonClicked() {
 }
 
 void DataBasePage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
-    if (m_trimState == TrimState::Off) return;
+    if (m_trimState == TrimState::Off && m_flagStartSec < 0) return;
 
     int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
     double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()), sampleId);
@@ -577,26 +600,67 @@ void DataBasePage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
             }
         }
     }
+
+    if (m_flagStartSec >= 0 || m_flagEndSec >= 0) {
+        const double px = event->pos().x();
+        if (m_flagStartSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_flagStartSec);
+            if (qAbs(linePx - px) <= FlagDragThresholdPx) {
+                m_flagDragging = true;
+                m_flagDragIsStart = true;
+                m_flagDragAccel = accelGraph->interactions().testFlag(QCP::iRangeDrag);
+                m_flagDragGyro = gyroGraph->interactions().testFlag(QCP::iRangeDrag);
+                setFlagInteractionEnabled(true);
+                return;
+            }
+        }
+        if (m_flagEndSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_flagEndSec);
+            if (qAbs(linePx - px) <= FlagDragThresholdPx) {
+                m_flagDragging = true;
+                m_flagDragIsStart = false;
+                m_flagDragAccel = accelGraph->interactions().testFlag(QCP::iRangeDrag);
+                m_flagDragGyro = gyroGraph->interactions().testFlag(QCP::iRangeDrag);
+                setFlagInteractionEnabled(true);
+                return;
+            }
+        }
+    }
 }
 
 void DataBasePage::onGraphMouseMove(QMouseEvent *event, QCustomPlot *plot) {
-    if (!m_trimDragging) return;
-
     int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
     double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()), sampleId);
 
-    if (m_trimDragIsStart) {
-        m_trimStartSec = sec;
-    } else {
-        m_trimEndSec = sec;
+    if (m_trimDragging) {
+        if (m_trimDragIsStart) {
+            m_trimStartSec = sec;
+        } else {
+            m_trimEndSec = sec;
+        }
+        updateTrimLine(sec, m_trimDragIsStart);
     }
-    updateTrimLine(sec, m_trimDragIsStart);
+
+    if (m_flagDragging) {
+        if (m_flagDragIsStart) {
+            m_flagStartSec = sec;
+        } else {
+            m_flagEndSec = sec;
+        }
+        updateFlagLine(sec, m_flagDragIsStart);
+        btnFlagAccept->setEnabled(true);
+        btnFlagDeny->setEnabled(true);
+    }
 }
 
 void DataBasePage::onGraphMouseRelease(QMouseEvent *event, QCustomPlot *plot) {
     Q_UNUSED(event);
     Q_UNUSED(plot);
     m_trimDragging = false;
+    if (m_flagDragging) {
+        m_flagDragging = false;
+        setFlagInteractionEnabled(false);
+    }
 }
 
 void DataBasePage::addTrimLine(double sec, bool isStart) {
@@ -669,6 +733,71 @@ void DataBasePage::resetTrim() {
     setTrimInteractionEnabled(false);
 }
 
+void DataBasePage::addFlagLine(double sec, bool isStart) {
+    QPen flagPen(isStart ? QColor(255, 165, 0) : QColor(0, 191, 255), 2, Qt::DashLine);
+
+    auto *lineA = new QCPItemStraightLine(accelGraph);
+    lineA->point1->setCoords(sec, 0);
+    lineA->point2->setCoords(sec, 1);
+    lineA->setPen(flagPen);
+
+    auto *lineG = new QCPItemStraightLine(gyroGraph);
+    lineG->point1->setCoords(sec, 0);
+    lineG->point2->setCoords(sec, 1);
+    lineG->setPen(flagPen);
+
+    if (isStart) {
+        for (QCPItemStraightLine *l : m_flagLinesStart)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_flagLinesStart.clear();
+        m_flagLinesStart.append(lineA);
+        m_flagLinesStart.append(lineG);
+    } else {
+        for (QCPItemStraightLine *l : m_flagLinesEnd)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_flagLinesEnd.clear();
+        m_flagLinesEnd.append(lineA);
+        m_flagLinesEnd.append(lineG);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void DataBasePage::updateFlagLine(double sec, bool isStart) {
+    const QVector<QCPItemStraightLine *> &vec = isStart ? m_flagLinesStart : m_flagLinesEnd;
+    for (QCPItemStraightLine *line : vec) {
+        line->point1->setCoords(sec, 0);
+        line->point2->setCoords(sec, 1);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void DataBasePage::clearFlagSeparators() {
+    for (QCPItemStraightLine *line : m_flagLinesStart)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+    for (QCPItemStraightLine *line : m_flagLinesEnd)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+    m_flagLinesStart.clear();
+    m_flagLinesEnd.clear();
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void DataBasePage::setFlagInteractionEnabled(bool on) {
+    if (on) {
+        accelGraph->setInteraction(QCP::iRangeDrag, false);
+        gyroGraph->setInteraction(QCP::iRangeDrag, false);
+    } else {
+        accelGraph->setInteraction(QCP::iRangeDrag, m_flagDragAccel);
+        gyroGraph->setInteraction(QCP::iRangeDrag, m_flagDragGyro);
+    }
+}
+
+void DataBasePage::applyFlagsToDatabase(int sampleId, int startFlag, int endFlag) {
+    m_dbManager->updateFlags(m_currentDatabase, sampleId, startFlag, endFlag);
+}
+
 double DataBasePage::clampToData(double sec, int sampleId) const {
     QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
     if (!db.isOpen()) return sec;
@@ -700,6 +829,59 @@ void DataBasePage::onTrimAccept() {
 
 void DataBasePage::onTrimDeny() {
     resetTrim();
+}
+
+void DataBasePage::onFlagAccept() {
+    if (m_flagStartSec < 0 || m_flagEndSec < 0 || m_currentSampleRow < 0) return;
+
+    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
+
+    int startIdx = 0;
+    int endIdx = 0;
+
+    QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
+    if (db.isOpen()) {
+        QSqlQuery query(db);
+        query.prepare("SELECT timestamp FROM motion_data WHERE sample_id = :id ORDER BY sample_index");
+        query.bindValue(":id", sampleId);
+        if (query.exec()) {
+            QVector<double> timestamps;
+            while (query.next()) {
+                timestamps.append(query.value(0).toLongLong() / 1000000.0);
+            }
+            if (!timestamps.isEmpty()) {
+                double firstTime = timestamps.first();
+                double lo = qMin(m_flagStartSec, m_flagEndSec);
+                double hi = qMax(m_flagStartSec, m_flagEndSec);
+                for (int i = 0; i < timestamps.size(); ++i) {
+                    if (timestamps[i] - firstTime >= lo) {
+                        startIdx = i;
+                        break;
+                    }
+                }
+                for (int i = timestamps.size() - 1; i >= 0; --i) {
+                    if (timestamps[i] - firstTime <= hi) {
+                        endIdx = i;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    applyFlagsToDatabase(sampleId, startIdx, endIdx);
+
+    btnFlagAccept->setEnabled(false);
+    btnFlagDeny->setEnabled(false);
+}
+
+void DataBasePage::onFlagDeny() {
+    clearFlagSeparators();
+    m_flagStartSec = m_flagEndSec = -1;
+    m_flagDragging = false;
+    btnFlagAccept->setEnabled(false);
+    btnFlagDeny->setEnabled(false);
+    setFlagInteractionEnabled(false);
 }
 
 void DataBasePage::applyTrimToDatabase(int sampleId, double loSec, double hiSec) {
@@ -935,11 +1117,17 @@ void DataBasePage::setupButtonsOnPage() {
     btnExtractSelected = new QPushButton("Extract selected");
     btnTrimAccept = new QPushButton("Accept");
     btnTrimDeny = new QPushButton("Deny");
+    btnFlagAccept = new QPushButton("Accept flag");
+    btnFlagDeny = new QPushButton("Deny flag");
 
     btnTrimAccept->setFixedWidth(80);
     btnTrimDeny->setFixedWidth(80);
+    btnFlagAccept->setFixedWidth(80);
+    btnFlagDeny->setFixedWidth(80);
     btnTrimAccept->setEnabled(false);
     btnTrimDeny->setEnabled(false);
+    btnFlagAccept->setEnabled(false);
+    btnFlagDeny->setEnabled(false);
     btnUndoSample->setEnabled(false);
     btnNextSample->setEnabled(false);
 }

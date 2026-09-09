@@ -2,6 +2,7 @@
 
 #include "core/databasemanager.h"
 #include "models/MotionType.h"
+#include "modules/slicer/windowslicer.h"
 
 #include <QDir>
 #include <QDebug>
@@ -70,6 +71,7 @@ void ExportCSV::createWidgets() {
 
     m_btnSelectAllFromParent = new QPushButton("Select all in table");
     m_btnUnselectAllFromParent = new QPushButton("Unselect all in select table");
+    m_btnChooseAllSelected = new QPushButton("Choose selected");
 
     statLabel = new QLabel("Selected: 0");
 
@@ -77,7 +79,7 @@ void ExportCSV::createWidgets() {
     treeView->setModel(treeModel);
     treeView->setHeaderHidden(false);
     treeView->setRootIsDecorated(true);
-    treeView->setSelectionMode(QAbstractItemView::SingleSelection);
+    treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
 
     treeView->header()->setSectionResizeMode(0, QHeaderView::Interactive);
@@ -92,16 +94,24 @@ void ExportCSV::createWidgets() {
 
     QLabel *setupWindowSizeLabel = new QLabel("Window size: ");
     QLabel *setupBiasWindowSizeLabel = new QLabel("Bias window size: ");
+    QLabel *setupMaxStartOffsetLabel = new QLabel("Max offset forward (+): ");
+    QLabel *setupMinOffsetLabel = new QLabel("Max offset backward (-): ");
     QLabel *setupDescriptionBlockLabel = new QLabel("Write description: ");
     QLabel *setupExportFloderName = new QLabel("Export floder name: ");
     QLabel *setupExportPathFloder = new QLabel("Export path: ");
 
     m_windowSize = new QLineEdit();
     m_biasWindow = new QLineEdit();
+    m_maxStartOffset = new QLineEdit("0");
+    m_maxStartOffset->setToolTip("Max random offset forward from startFlag (0 = no offset)");
+    m_minOffset = new QLineEdit("0");
+    m_minOffset->setToolTip("Max random offset backward from startFlag (0 = no offset)");
     QRegularExpression numberRx("[0-9]+");
     QValidator *numberValidator = new QRegularExpressionValidator(numberRx, this);
     m_windowSize->setValidator(numberValidator);
     m_biasWindow->setValidator(numberValidator);
+    m_maxStartOffset->setValidator(numberValidator);
+    m_minOffset->setValidator(numberValidator);
 
     m_exportPath = new QLineEdit();
     m_exportPath->setPlaceholderText("Enter directory for export dataset");
@@ -140,20 +150,24 @@ void ExportCSV::createWidgets() {
     topGridLayout->addWidget(m_windowSize, 0, 1);
     topGridLayout->addWidget(setupBiasWindowSizeLabel, 1, 0);
     topGridLayout->addWidget(m_biasWindow, 1, 1);
-    topGridLayout->addWidget(setupDescriptionBlockLabel, 2, 0);
-    topGridLayout->addWidget(m_descriptionBlock, 2, 1);
-    topGridLayout->addWidget(setupExportFloderName, 3, 0);
-    topGridLayout->addWidget(m_exportFloderName, 3, 1);
-    topGridLayout->addWidget(setupExportPathFloder, 4, 0);
-    topGridLayout->addWidget(m_exportPath, 4, 1);
-    topGridLayout->addWidget(m_btnExportPath, 4, 2);
-    topGridLayout->addWidget(m_btnRefreshInfo, 5, 1);
-    topGridLayout->addWidget(m_btnExport, 5, 2);
-    topGridLayout->addWidget(m_normalize, 6, 0);
-    topGridLayout->addWidget(new QLabel("Max accel (g):"), 6, 1);
-    topGridLayout->addWidget(m_maxAccel, 6, 2);
-    topGridLayout->addWidget(new QLabel("Max gyro (°/s):"), 7, 1);
-    topGridLayout->addWidget(m_maxGyro, 7, 2);
+    topGridLayout->addWidget(setupMaxStartOffsetLabel, 2, 0);
+    topGridLayout->addWidget(m_maxStartOffset, 2, 1);
+    topGridLayout->addWidget(setupMinOffsetLabel, 3, 0);
+    topGridLayout->addWidget(m_minOffset, 3, 1);
+    topGridLayout->addWidget(setupDescriptionBlockLabel, 4, 0);
+    topGridLayout->addWidget(m_descriptionBlock, 4, 1);
+    topGridLayout->addWidget(setupExportFloderName, 5, 0);
+    topGridLayout->addWidget(m_exportFloderName, 5, 1);
+    topGridLayout->addWidget(setupExportPathFloder, 6, 0);
+    topGridLayout->addWidget(m_exportPath, 6, 1);
+    topGridLayout->addWidget(m_btnExportPath, 6, 2);
+    topGridLayout->addWidget(m_btnRefreshInfo, 7, 1);
+    topGridLayout->addWidget(m_btnExport, 7, 2);
+    topGridLayout->addWidget(m_normalize, 8, 0);
+    topGridLayout->addWidget(new QLabel("Max accel (g):"), 8, 1);
+    topGridLayout->addWidget(m_maxAccel, 8, 2);
+    topGridLayout->addWidget(new QLabel("Max gyro (°/s):"), 9, 1);
+    topGridLayout->addWidget(m_maxGyro, 9, 2);
 
     m_downInfo = new QTextEdit();
 
@@ -172,6 +186,7 @@ void ExportCSV::createWidgets() {
 void ExportCSV::createLayouts() {
 
     QHBoxLayout *selectButtons = new QHBoxLayout();
+    selectButtons->addWidget(m_btnChooseAllSelected);
     selectButtons->addWidget(m_btnSelectAllFromParent);
     selectButtons->addWidget(m_btnUnselectAllFromParent);
 
@@ -223,8 +238,12 @@ void ExportCSV::connectSignals() {
     connect(m_btnExport, &QPushButton::clicked,
             this, &ExportCSV::onExportClicked);
 
+    connect(m_btnChooseAllSelected, &QPushButton::clicked,
+            this, &ExportCSV::onChooseSelectedClicked);
+
     connect(treeModel, &QStandardItemModel::itemChanged,
             this, &ExportCSV::onItemCheckChanged);
+
 
 }
 
@@ -273,11 +292,11 @@ void ExportCSV::refreshDatabaseList() {
 
                 if (rowData.isEmpty()) continue;
 
-                QString displayText = QString("ID:%1 | %2 | sample_count:%3 | crc16:%4")
+                QString displayText = QString("ID:%1 | %2 | sample_count:%3 | %4")
                     .arg(rowData.value(0, ""))
                     .arg(motionTypeToString(rowData.value(1).toInt()))
                     .arg(rowData.value(2, ""))
-                    .arg(rowData.value(3, ""));
+                    .arg((rowData.value(4).toInt() != -1 || rowData.value(5).toInt() != -1) ? "MARKERED" : "NOT MARKERED");
 
                 QStandardItem *rowItem = new QStandardItem(displayText);
                 rowItem->setEditable(false);
@@ -344,15 +363,31 @@ void ExportCSV::onItemCheckChanged(QStandardItem *item) {
 
 void ExportCSV::selectAllInTable() {
     QStandardItem *tableItem = findSelectedTableItem();
-    if (!tableItem) return;
+    if (!tableItem) {
+        qDebug() << "No table selected";
+        return;
+    }
+
+    // Проверяем, что это действительно таблица
+    if (!tableItem->hasChildren()) {
+        qDebug() << "Selected item is not a table";
+        return;
+    }
+
     treeModel->blockSignals(true);
+
+    int checkedCount = 0;
     for (int i = 0; i < tableItem->rowCount(); i++) {
         QStandardItem *child = tableItem->child(i, 0);
         if (child && child->isCheckable()) {
             child->setCheckState(Qt::Checked);
+            checkedCount++;
         }
     }
+
     treeModel->blockSignals(false);
+
+    qDebug() << "Selected" << checkedCount << "records in table" << tableItem->text();
 
     rebuildSelectedRecords();
     updateStatLabel();
@@ -360,15 +395,17 @@ void ExportCSV::selectAllInTable() {
 
 void ExportCSV::unselectAllInTable() {
     QStandardItem *tableItem = findSelectedTableItem();
-    if (!tableItem) return;
+    if (!tableItem || !tableItem->hasChildren()) return;
 
     treeModel->blockSignals(true);
+
     for (int i = 0; i < tableItem->rowCount(); i++) {
         QStandardItem *child = tableItem->child(i, 0);
         if (child && child->isCheckable()) {
             child->setCheckState(Qt::Unchecked);
         }
     }
+
     treeModel->blockSignals(false);
 
     rebuildSelectedRecords();
@@ -497,6 +534,8 @@ void ExportCSV::onRefreshInfoClicked() {
     m_downInfo->append(QString(""));
     m_downInfo->append(QString("Window size: %1").arg(windowSize));
     m_downInfo->append(QString("Bias window size: %1").arg(biasSize));
+    m_downInfo->append(QString("Max offset forward: %1").arg(m_maxStartOffset->text().toInt()));
+    m_downInfo->append(QString("Max offset backward: %1").arg(m_minOffset->text().toInt()));
     m_downInfo->append(QString("Export path: %1/%2/").arg(pathExport).arg(floderName));
 
     if (m_normalize->isChecked()) {
@@ -545,6 +584,8 @@ void ExportCSV::onExportClicked() {
 
     const int windowSize = m_windowSize->text().toInt();
     const int windowBias = m_biasWindow->text().toInt();
+    const int maxOffset = m_maxStartOffset->text().toInt();
+    const int minOffset = m_minOffset->text().toInt();
     const QString path = m_exportPath->text();
     const QString name = m_exportFloderName->text();
 
@@ -573,7 +614,9 @@ void ExportCSV::onExportClicked() {
 
     QString msg = QString("Export dataset + i more info "
                           "\n Windows size: %1\n "
-                          "Window bias: %2\n").arg(windowSize).arg(windowBias);
+                          "Window bias: %2\n"
+                          "Max offset: %3\n"
+                          "Min offset: %4\n").arg(windowSize).arg(windowBias).arg(maxOffset).arg(maxOffset);
     QMessageBox::StandardButton reply = QMessageBox::question(
         this,
         "Export dataset",
@@ -588,9 +631,12 @@ void ExportCSV::onExportClicked() {
         editPath.append(m_exportFloderName->text());
 
         QSet<int> uniqueMotionTypes;
+
         for (const SelectedRecord &record : m_selectedRecords) {
 
             QStringList list = m_dbManager->getTableRows(record.dbName, record.tableName, record.id);
+
+
 
             if (!list.isEmpty()) {
                 uniqueMotionTypes.insert(list.at(1).toInt());
@@ -600,11 +646,27 @@ void ExportCSV::onExportClicked() {
         for (int motionType : uniqueMotionTypes) {
             createFloders(editPath, motionTypeToString(motionType));
         }
-
-        createReport(editPath, windowSize, windowBias);
+        createReport(editPath, windowSize, windowBias, maxOffset, minOffset);
         createReportMassage(editPath, m_downInfo->toPlainText());
-
     }
+}
+
+void ExportCSV::onChooseSelectedClicked() {
+    QModelIndexList selectedIndexes = treeView->selectionModel()->selectedRows(0);
+
+    treeModel->blockSignals(true);
+
+    for (const QModelIndex &index : selectedIndexes) {
+        QStandardItem *child = treeModel->itemFromIndex(index);
+        if (child && child->isCheckable()) {
+            child->setCheckState(Qt::Checked);
+        }
+    }
+
+    treeModel->blockSignals(false);
+
+    rebuildSelectedRecords();
+    updateStatLabel();
 }
 
 void ExportCSV::createFloders(const QString path, const QString nameFolder) {
@@ -650,26 +712,38 @@ void ExportCSV::createFloders(const QString path, const QString nameFolder) {
 
 }
 
-void ExportCSV::createReport(const QString path, int windowSize, int windowBias) {
+void ExportCSV::createReport(const QString path, int windowSize, int windowBias, int maxOffset, int minOffset) {
 
     for (const SelectedRecord &record : m_selectedRecords) {
 
         QStringList list = m_dbManager->getTableRows(record.dbName, record.tableName, record.id);
         int typeMotion = list.at(1).toInt();
+        int startFlag = list.at(4).toInt();
+        int endFlag = list.at(5).toInt();
         QString typePath = path;
         typePath.append("/");
         typePath.append(motionTypeToString(typeMotion));
 
-        createCVSFile(typePath, typeMotion, record, windowSize, windowBias);
+        createCVSFile(typePath, typeMotion, record, windowSize, windowBias, maxOffset, minOffset, startFlag, endFlag);
 
     }
 }
 
 void ExportCSV::createCVSFile(const QString path, int typeMotion, const SelectedRecord &record,
-                              int windowSize, int windowBias) {
+                              int windowSize, int windowBias, int maxOffset, int minOffset,
+                              const int startFlag, const int endFlag) {
 
     QVector<QVector<float>> samples = m_dbManager->getGestureSamples(record.dbName, record.id);
-    QVector<QVector<QVector<float>>> windows = sliceWindows(samples, windowSize, windowBias);
+
+    WindowSlicer slicer;
+    slicer.setWindowSize(windowSize);
+    slicer.setBias(windowBias);
+    slicer.setMaxOffset(maxOffset);
+    slicer.setMinOffset(minOffset);
+    slicer.setStartFlag(startFlag);
+    slicer.setEndFlag(endFlag);
+
+    QVector<QVector<QVector<float>>> windows = slicer.slice(samples);
 
     bool doNormalize = m_normalize->isChecked();
     float maxAccel = m_maxAccel->text().toFloat();

@@ -22,7 +22,8 @@ SOURCES += \
     qcustomplot/qcustomplot.cpp \
     core/serialport.cpp \
     widgets/statusbarwidget.cpp \
-    core/motionrecorder.cpp
+    core/motionrecorder.cpp \
+    modules/slicer/windowslicer.cpp
 
 HEADERS += \
     models/AnalysisConfig.h \
@@ -44,7 +45,8 @@ HEADERS += \
     models/motionsample.h \
     models/portconfig.h \
     widgets/statusbarwidget.h \
-    core/motionrecorder.h
+    core/motionrecorder.h \
+    modules/slicer/windowslicer.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

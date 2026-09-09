@@ -73,6 +73,14 @@ private:
     double clampToData(double sec, int sampleId) const;
     void applyTrimToDatabase(int sampleId, double loSec, double hiSec);
 
+    void addFlagLine(double sec, bool isStart);
+    void updateFlagLine(double sec, bool isStart);
+    void clearFlagSeparators();
+    void setFlagInteractionEnabled(bool on);
+    void applyFlagsToDatabase(int sampleId, int startFlag, int endFlag);
+    void onFlagAccept();
+    void onFlagDeny();
+
     void onAddSelectedClicked();
     void onExtractSelectedClicked();
     void onDeleteFromDataSetClicked();
@@ -133,6 +141,8 @@ private:
     QPushButton *btnExtractSelected;
     QPushButton *btnTrimAccept;
     QPushButton *btnTrimDeny;
+    QPushButton *btnFlagAccept;
+    QPushButton *btnFlagDeny;
 
     QTableView *samplesView;
     QSqlTableModel *samplesModel;
@@ -157,6 +167,16 @@ private:
     bool m_rangeDragAccel = false;
     bool m_rangeDragGyro = false;
     static constexpr int TrimDragThresholdPx = 6;
+
+    double m_flagStartSec = -1;
+    double m_flagEndSec = -1;
+    QVector<QCPItemStraightLine *> m_flagLinesStart;
+    QVector<QCPItemStraightLine *> m_flagLinesEnd;
+    bool m_flagDragging = false;
+    bool m_flagDragIsStart = false;
+    bool m_flagDragAccel = false;
+    bool m_flagDragGyro = false;
+    static constexpr int FlagDragThresholdPx = 6;
 
     QLineEdit *m_pathEdit;
 

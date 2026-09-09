@@ -448,6 +448,8 @@ QStringList DatabaseManager::getTableRows(const QString &dbName, const QString &
             columnList.append(query.value(1).toString());
             columnList.append(query.value(2).toString());
             columnList.append(query.value(3).toString());
+            columnList.append(query.value(5).toString());
+            columnList.append(query.value(6).toString());
         }
     }
 
@@ -621,7 +623,9 @@ bool DatabaseManager::createDatasetDatabase( const QString &dbName, const QStrin
             "motion_type INTEGER NOT NULL,"
             "sample_count INTEGER NOT NULL,"
             "crc16 INTEGER,"
-            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+            "start_flag INTEGER DEFAULT -1,"
+            "end_flag INTEGER DEFAULT -1"
             ")"))
         {
             db.rollback();
@@ -685,20 +689,20 @@ bool DatabaseManager::createDatasetDatabase( const QString &dbName, const QStrin
         description);
 }
 
-bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, const QVector<MotionSample> &samples, uint16_t crc16) {
+int DatabaseManager::insertGesture(const QString &dbName, MotionType type, const QVector<MotionSample> &samples, uint16_t crc16) {
 
     if (samples.isEmpty())
-        return false;
+        return -1;
 
     QSqlDatabase db = openDatabase(dbName);
     if (!db.isOpen()) {
         emit errorOccurred(QString("Cannot open database %1 for insert").arg(dbName));
-        return false;
+        return -1;
     }
 
     if (!db.transaction()) {
         emit errorOccurred(QString("Failed to start transaction: %1").arg(db.lastError().text()));
-        return false;
+        return -1;
     }
 
     QSqlQuery query(db);
@@ -712,7 +716,7 @@ bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, cons
     if (!query.exec()) {
         emit errorOccurred(QString("Failed to insert sample: %1").arg(query.lastError().text()));
         db.rollback();
-        return false;
+        return -1;
     }
 
     const int sampleId = query.lastInsertId().toInt();
@@ -736,17 +740,17 @@ bool DatabaseManager::insertGesture(const QString &dbName, MotionType type, cons
         if (!query.exec()) {
             emit errorOccurred(QString("Failed to insert motion_data: %1").arg(query.lastError().text()));
             db.rollback();
-            return false;
+            return -1;
         }
     }
 
     if (!db.commit()) {
         emit errorOccurred(QString("Failed to commit: %1").arg(db.lastError().text()));
         db.rollback();
-        return false;
+        return -1;
     }
 
-    return true;
+    return sampleId;
 }
 
 QVector<QVector<float>> DatabaseManager::getGestureSamples(const QString &dbName, const int motionId) {
@@ -800,6 +804,25 @@ bool DatabaseManager::updateGestureMotionType(const QString &dbName, int sampleI
 
     if (!query.exec()) {
         emit errorOccurred(QString("Failed to update motion type: %1").arg(query.lastError().text()));
+        return false;
+    }
+    return true;
+}
+
+bool DatabaseManager::updateFlags(const QString &dbName, const int sampleId, const int startFlag, const int endFlag)
+{
+    QSqlDatabase db = openDatabase(dbName);
+    if (!db.isOpen())
+        return false;
+
+    QSqlQuery query(db);
+    query.prepare("UPDATE samples SET start_flag = :start_flag, end_flag = :end_flag WHERE id = :id");
+    query.bindValue(":start_flag", startFlag);
+    query.bindValue(":end_flag", endFlag);
+    query.bindValue(":id", sampleId);
+
+    if (!query.exec()) {
+        emit errorOccurred(QString("Failed to update flags: %1").arg(query.lastError().text()));
         return false;
     }
     return true;

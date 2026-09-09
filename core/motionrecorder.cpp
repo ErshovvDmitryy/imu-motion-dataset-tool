@@ -29,6 +29,8 @@ void MotionRecorder::setMotionType(const MotionType &type) {
 void MotionRecorder::clearBuffer() {
     m_buffer.clear();
     m_lastRecordState = false;
+    m_startFlag = -1;
+    m_endFlag = -1;
 }
 
 void MotionRecorder::trimBuffer(double loSec, double hiSec) {
@@ -43,6 +45,11 @@ void MotionRecorder::trimBuffer(double loSec, double hiSec) {
 
     m_endData.count = static_cast<uint32_t>(m_buffer.size());
     m_endData.crc16 = computeCrc16(m_buffer);
+}
+
+void MotionRecorder::setFlags(int startFlag, int endFlag) {
+    m_startFlag = startFlag;
+    m_endFlag = endFlag;
 }
 
 void MotionRecorder::onSample(const MotionPacket &MotionPacket) {
@@ -73,10 +80,17 @@ void MotionRecorder::insertGesture() {
     }
 
     if (m_dbManager) {
-        m_dbManager->insertGesture(m_targetDb,
-                                   m_targetMotionType,
-                                   m_buffer,
-                                   m_endData.crc16);
+        int sampleId = m_dbManager->insertGesture(m_targetDb,
+                                    m_targetMotionType,
+                                    m_buffer,
+                                    m_endData.crc16);
+
+        if (sampleId >= 0 && m_startFlag >= 0 && m_endFlag >= 0) {
+            m_dbManager->updateFlags(m_targetDb, sampleId, m_startFlag, m_endFlag);
+        }
+
+        m_startFlag = -1;
+        m_endFlag = -1;
     }
 }
 

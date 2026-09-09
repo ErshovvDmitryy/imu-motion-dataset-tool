@@ -48,14 +48,18 @@ public:
     QStringList getTableRows(const QString &dbName, const QString &tableName, const int id);
     QStringList getIdFromTable(const QString &dbName, const QString &tableName);
 
-    bool insertGesture(const QString &dbName,
+    int insertGesture(const QString &dbName,
                        MotionType type,
                        const QVector<MotionSample> &samples,
                        uint16_t crc16);
 
+
+
     QVector<QVector<float>> getGestureSamples(const QString &dbName,const int motionId);
 
     bool updateGestureMotionType(const QString &dbName, int sampleId, MotionType type);
+    bool updateFlags(const QString &dbName,const int sampleId,const int startFlag, const int endFlag);
+
     bool isExportDatabase(const QString &datasetDbName) const;
 
 signals:

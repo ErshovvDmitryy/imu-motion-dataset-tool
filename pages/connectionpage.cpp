@@ -57,6 +57,7 @@ void ConnectionPage::createWidgets() {
     setupRecordedDataWidget();  //  Setup recorded data block on page
     setupInfoBlockWidget();     //  Setup info block on page
     setupTrimBlockWidget();     //  Setup trim block on page
+    setupFlagMarkingWidget();
 
 }
 
@@ -75,11 +76,16 @@ void ConnectionPage::createLayouts() {
     rightLayout->addWidget(gyroGraph);
     rightLayout->addWidget(accelGraph);
 
+    QGroupBox *markingTrimBlockWidget = new QGroupBox("Edit graph");
+    QVBoxLayout *markingTrimBlockLayout = new QVBoxLayout(markingTrimBlockWidget);
+    markingTrimBlockLayout->addWidget(trimBlock);
+    markingTrimBlockLayout->addWidget(flagMarkingBlock);
+
     rightLayout->addLayout(rightUnderGraphLayout);
     rightLayout->addStretch();
 
     rightUnderGraphLayout->addWidget(databaseBlock, 0, 0);
-    rightUnderGraphLayout->addWidget(trimBlock, 0, 1);
+    rightUnderGraphLayout->addWidget(markingTrimBlockWidget, 0, 1);
     rightUnderGraphLayout->addWidget(infoGroup, 1, 0);
     rightUnderGraphLayout->addWidget(recordedDataGroup, 1, 1);
 
@@ -186,6 +192,21 @@ void ConnectionPage::connectSignals() {
             &QPushButton::clicked,
             this,
             &ConnectionPage::nextGestureRequested);
+
+    connect(btnFlagMarking,
+            &QPushButton::clicked,
+            this,
+            &ConnectionPage::onFlagMarkingClicked);
+
+    connect(btnFlagAccept,
+            &QPushButton::clicked,
+            this,
+            &ConnectionPage::onFlagMarkingAcceptClicked);
+
+    connect(btnFlagDeny,
+            &QPushButton::clicked,
+            this,
+            &ConnectionPage::onFlagMarkingDenyClicked);
 
     connect(btnTrimStart,
             &QPushButton::clicked,
@@ -311,6 +332,60 @@ void ConnectionPage::clearTrimSeparators() {
     gyroGraph->replot(QCustomPlot::rpQueuedReplot);
 }
 
+void ConnectionPage::clearFlagMarkingSeparators() {
+
+    for (QCPItemStraightLine *line : m_startFlagMarkingSeparator)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+
+    for (QCPItemStraightLine *line : m_endFlagMarkingSeparator)
+        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
+    m_startFlagMarkingSeparator.clear();
+    m_endFlagMarkingSeparator.clear();
+
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void ConnectionPage::addFlagLine(double sec, bool isStart) {
+    QPen flagPen(isStart ? QColor(255, 165, 0) : QColor(0, 191, 255), 2, Qt::DashLine);
+
+    auto *lineA = new QCPItemStraightLine(accelGraph);
+    lineA->point1->setCoords(sec, 0);
+    lineA->point2->setCoords(sec, 1);
+    lineA->setPen(flagPen);
+
+    auto *lineG = new QCPItemStraightLine(gyroGraph);
+    lineG->point1->setCoords(sec, 0);
+    lineG->point2->setCoords(sec, 1);
+    lineG->setPen(flagPen);
+
+    if (isStart) {
+        for (QCPItemStraightLine *l : m_startFlagMarkingSeparator)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_startFlagMarkingSeparator.clear();
+        m_startFlagMarkingSeparator.append(lineA);
+        m_startFlagMarkingSeparator.append(lineG);
+    } else {
+        for (QCPItemStraightLine *l : m_endFlagMarkingSeparator)
+            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
+        m_endFlagMarkingSeparator.clear();
+        m_endFlagMarkingSeparator.append(lineA);
+        m_endFlagMarkingSeparator.append(lineG);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void ConnectionPage::updateFlagLine(double sec, bool isStart) {
+    const QVector<QCPItemStraightLine *> &vec = isStart ? m_startFlagMarkingSeparator : m_endFlagMarkingSeparator;
+    for (QCPItemStraightLine *line : vec) {
+        line->point1->setCoords(sec, 0);
+        line->point2->setCoords(sec, 1);
+    }
+    accelGraph->replot(QCustomPlot::rpQueuedReplot);
+    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+}
+
 void ConnectionPage::setTrimInteractionEnabled(bool on) {
 
     if (on) {
@@ -319,6 +394,17 @@ void ConnectionPage::setTrimInteractionEnabled(bool on) {
     } else {
         accelGraph->setInteraction(QCP::iRangeDrag, m_rangeDragAccel);
         gyroGraph->setInteraction(QCP::iRangeDrag, m_rangeDragGyro);
+    }
+}
+
+void ConnectionPage::setFlagMarkingInteractionEnabled(bool on) {
+
+    if (on) {
+        accelGraph->setInteraction(QCP::iRangeDrag, false);
+        gyroGraph->setInteraction(QCP::iRangeDrag, false);
+    } else {
+        accelGraph->setInteraction(QCP::iRangeDrag, m_flagMarkingDragAccel);
+        gyroGraph->setInteraction(QCP::iRangeDrag, m_flagMarkingDragGyro);
     }
 }
 
@@ -331,6 +417,19 @@ void ConnectionPage::resetTrim() {
     btnTrimDeny->setEnabled(false);
     setTrimInteractionEnabled(false);
     if (recordTimeTrim) recordTimeTrim->setText("0 / 0");
+}
+
+void ConnectionPage::resetFlagMarking() {
+    clearFlagMarkingSeparators();
+    m_startFlagSec = m_endFlagSec = -1;
+    m_flagState = FlagState::Off;
+    m_flagMarkingDragging = false;
+    btnFlagAccept->setEnabled(false);
+    btnFlagDeny->setEnabled(false);
+    setFlagMarkingInteractionEnabled(false);
+    if (flagMarkingLabel) {
+        flagMarkingLabel->setText("0 / 0");
+    }
 }
 
 double ConnectionPage::clampToData(double sec) const {
@@ -361,7 +460,7 @@ void ConnectionPage::onTrimButtonClicked() {
 }
 
 void ConnectionPage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
-    if (m_trimState == TrimState::Off) return;
+    if (m_trimState == TrimState::Off && m_flagState == FlagState::Off) return;
 
     double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()));
 
@@ -401,23 +500,76 @@ void ConnectionPage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
             }
         }
     }
+
+    else if (m_flagState == FlagState::AwaitStart){
+        m_startFlagSec = sec;
+        addFlagLine(sec, true);
+        m_flagState = FlagState::AwaitEnd;
+        if (flagMarkingLabel) {
+            flagMarkingLabel->setText(QString("%1 / -").arg(sec, 0, 'f', 3));
+        }
+    }
+
+    else if (m_flagState == FlagState::AwaitEnd) {
+        m_endFlagSec = sec;
+        addFlagLine(sec, false);
+        m_flagState = FlagState::Adjust;
+        btnFlagAccept->setEnabled(true);
+        btnFlagDeny->setEnabled(true);
+        if (flagMarkingLabel)
+            flagMarkingLabel->setText(QString("%1 / %2")
+                .arg(m_startFlagSec, 0, 'f', 3)
+                .arg(m_endFlagSec, 0, 'f', 3));
+    }
+
+    else if (m_flagState == FlagState::Adjust) {
+        const double px = event->pos().x();
+        if (m_startFlagSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_startFlagSec);
+            if (qAbs(linePx - px) <= flagMarkingDragThresholdPx) {
+                m_flagMarkingDragging = true;
+                m_flagMarkingDragIsStart = true;
+                return;
+            }
+        }
+        if (m_endFlagSec >= 0) {
+            double linePx = plot->xAxis->coordToPixel(m_endFlagSec);
+            if (qAbs(linePx - px) <= flagMarkingDragThresholdPx) {
+                m_flagMarkingDragging = true;
+                m_flagMarkingDragIsStart = false;
+            }
+        }
+    }
 }
 
 void ConnectionPage::onGraphMouseMove(QMouseEvent *event, QCustomPlot *plot) {
-    if (!m_trimDragging) return;
     double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()));
-    if (m_trimDragIsStart) m_trimStartSec = sec; else m_trimEndSec = sec;
-    updateTrimLine(sec, m_trimDragIsStart);
-    if (recordTimeTrim)
-        recordTimeTrim->setText(QString("%1 / %2")
-            .arg(m_trimStartSec, 0, 'f', 3)
-            .arg(m_trimEndSec, 0, 'f', 3));
+
+    if (m_trimDragging) {
+        if (m_trimDragIsStart) m_trimStartSec = sec; else m_trimEndSec = sec;
+        updateTrimLine(sec, m_trimDragIsStart);
+        if (recordTimeTrim)
+            recordTimeTrim->setText(QString("%1 / %2")
+                .arg(m_trimStartSec, 0, 'f', 3)
+                .arg(m_trimEndSec, 0, 'f', 3));
+    }
+
+    if (m_flagMarkingDragging) {
+        if (m_flagMarkingDragIsStart) m_startFlagSec = sec; else m_endFlagSec = sec;
+        updateFlagLine(sec, m_flagMarkingDragIsStart);
+        if (flagMarkingLabel)
+            flagMarkingLabel->setText(QString("%1 / %2")
+                .arg(m_startFlagSec, 0, 'f', 3)
+                .arg(m_endFlagSec, 0, 'f', 3));
+    }
 }
 
 void ConnectionPage::onGraphMouseRelease(QMouseEvent *event, QCustomPlot *plot) {
     Q_UNUSED(event);
     Q_UNUSED(plot);
     m_trimDragging = false;
+    m_flagMarkingDragging = false;
+
 }
 
 void ConnectionPage::onTrimAccept() {
@@ -609,6 +761,74 @@ void ConnectionPage::onSaveOnceClicked() {
     }
 }
 
+void ConnectionPage::onFlagMarkingClicked()
+{
+    if (m_flagState == FlagState::Off) {
+
+        m_flagMarkingDragAccel = accelGraph->interactions().testFlag(QCP::iRangeDrag);
+        m_flagMarkingDragGyro  = gyroGraph->interactions().testFlag(QCP::iRangeDrag);
+        clearFlagMarkingSeparators();
+        m_startFlagSec = m_endFlagSec = -1;
+        m_flagState = FlagState::AwaitStart;
+        btnFlagAccept->setEnabled(false);
+        btnFlagDeny->setEnabled(false);
+        setFlagMarkingInteractionEnabled(true);
+        if (flagMarkingLabel) flagMarkingLabel->setText("click start / -");
+    } else {
+
+        resetFlagMarking();
+    }
+}
+
+void ConnectionPage::onFlagMarkingAcceptClicked()
+{
+    if (m_startFlagSec < 0 || m_endFlagSec < 0) return;
+
+    double lo = (m_startFlagSec < m_endFlagSec) ? m_startFlagSec : m_endFlagSec;
+    double hi = (m_startFlagSec < m_endFlagSec) ? m_endFlagSec : m_startFlagSec;
+
+    int startIdx = 0;
+    int endIdx = 0;
+
+    if (!motionSaved.isEmpty()) {
+        for (int i = 0; i < motionSaved.size(); ++i) {
+            double t = motionSaved[i].time / 1000000.0;
+            if (t >= lo) {
+                startIdx = i;
+                break;
+            }
+        }
+        for (int i = motionSaved.size() - 1; i >= 0; --i) {
+            double t = motionSaved[i].time / 1000000.0;
+            if (t <= hi) {
+                endIdx = i;
+                break;
+            }
+        }
+    }
+
+    if (flagMarkingLabel) {
+        flagMarkingLabel->setText(QString("%1 / %2").arg(startIdx).arg(endIdx));
+    }
+
+    if (flagsLabel) {
+        flagsLabel->setText(QString("%1 / %2").arg(startIdx).arg(endIdx));
+    }
+
+    emit flagMarkingRequested(startIdx, endIdx);
+
+    m_flagState = FlagState::Off;
+    m_flagMarkingDragging = false;
+    btnFlagAccept->setEnabled(false);
+    btnFlagDeny->setEnabled(false);
+    setFlagMarkingInteractionEnabled(false);
+}
+
+void ConnectionPage::onFlagMarkingDenyClicked()
+{
+    resetFlagMarking();
+}
+
 void ConnectionPage::setPorts(const QStringList &ports) {
     portList->clear();
 
@@ -789,10 +1009,12 @@ void ConnectionPage::setupInfoBlockWidget() {
     QLabel *lengthCaption = new QLabel("Length:");
     QLabel *freqCaption   = new QLabel("Freq:");
     QLabel *samplesCaption = new QLabel("Samples:");
+    QLabel *flagsCaption = new QLabel("Flags (start/end):");
 
     infoLengthLabel  = new QLabel("-- s");
     infoFreqLabel    = new QLabel("-- Hz");
     infoSamplesLabel = new QLabel("--");
+    flagsLabel = new QLabel("-- / --");
 
     QGridLayout *infoGridLayout = new QGridLayout(infoGroup);
     infoGridLayout->setContentsMargins(6, 6, 6, 6);
@@ -802,12 +1024,47 @@ void ConnectionPage::setupInfoBlockWidget() {
     infoGridLayout->addWidget(infoFreqLabel,  1, 1);
     infoGridLayout->addWidget(samplesCaption, 2, 0);
     infoGridLayout->addWidget(infoSamplesLabel, 2, 1);
+    infoGridLayout->addWidget(flagsCaption, 3, 0);
+    infoGridLayout->addWidget(flagsLabel, 3, 1);
     infoGridLayout->setColumnStretch(2, 1);
 
     btnPrevGesture->setEnabled(false);
     btnNextGesture->setEnabled(false);
     btnSaveOnce->setEnabled(false);
     btnDiscardOnce->setEnabled(false);
+}
+
+void ConnectionPage::setupFlagMarkingWidget() {
+
+    flagMarkingBlock = new QGroupBox("Flags marking block");
+
+    btnFlagMarking = new QPushButton("Marking file");
+    btnFlagAccept = new QPushButton("Accept");
+    btnFlagDeny = new QPushButton("Deny");
+
+    btnFlagMarking->setFixedWidth(100);
+    btnFlagAccept->setFixedWidth(100);
+    btnFlagDeny->setFixedWidth(100);
+
+    flagMarkingLabel = new QLabel("0 / 0");
+
+    QHBoxLayout *flagMarkingBlockLayout = new QHBoxLayout();
+    flagMarkingBlockLayout->setContentsMargins(0, 0, 0, 0);
+
+    QWidget *markingPage = new QWidget();
+    QHBoxLayout *markingLayout = new QHBoxLayout(markingPage);
+    markingLayout->setContentsMargins(0, 0, 0, 0);
+    markingLayout->addWidget(btnFlagMarking);
+    markingLayout->addStretch();
+    markingLayout->addWidget(flagMarkingLabel);
+    markingLayout->addStretch();
+    markingLayout->addWidget(btnFlagAccept);
+    markingLayout->addWidget(btnFlagDeny);
+
+    QVBoxLayout *rightDownMarkingLayout = new QVBoxLayout(flagMarkingBlock);
+    rightDownMarkingLayout->setContentsMargins(6, 6, 6, 6);
+    rightDownMarkingLayout->addWidget(markingPage);
+
 }
 
 void ConnectionPage::setupTrimBlockWidget() {
@@ -817,8 +1074,8 @@ void ConnectionPage::setupTrimBlockWidget() {
     btnTrimAccept = new QPushButton("Accept");
     btnTrimDeny = new QPushButton("Deny");
 
-    btnTrimStart->setFixedWidth(80);
-    btnTrimAccept->setFixedWidth(80);
+    btnTrimStart->setFixedWidth(100);
+    btnTrimAccept->setFixedWidth(100);
     btnTrimDeny->setFixedWidth(100);
 
     btnTrimStart->setEnabled(false);

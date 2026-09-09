@@ -75,6 +75,7 @@ private:
     void setupInfoBlockWidget();
     void setupTrimBlockWidget();
     void setupDataBaseBlockWidget();
+    void setupFlagMarkingWidget();
 
 // =================== Func for setups layouts
 
@@ -102,6 +103,18 @@ private:
     void onSaveOnceClicked();
 
 // =================== Private function: TRIM func
+
+    enum class FlagState { Off, AwaitStart, AwaitEnd, Adjust };
+
+    void resetFlagMarking();
+    void onFlagMarkingClicked();
+    void onFlagMarkingAcceptClicked();
+    void onFlagMarkingDenyClicked();
+    void setFlagMarkingInteractionEnabled(bool on);
+
+    void clearFlagMarkingSeparators();
+    void addFlagLine(double sec, bool isStart);
+    void updateFlagLine(double sec, bool isStart);
 
     enum class TrimState { Off, AwaitStart, AwaitEnd, Adjust };
 
@@ -168,6 +181,27 @@ private:
     QLabel *infoLengthLabel;
     QLabel *infoFreqLabel;
     QLabel *infoSamplesLabel;
+    QLabel *flagsLabel;
+
+// =================== FLAG MARKING BLOCK DECLARATION
+
+    QGroupBox *flagMarkingBlock;
+    QPushButton *btnFlagMarking;
+    QPushButton *btnFlagAccept;
+    QPushButton *btnFlagDeny;
+    QLabel *flagMarkingLabel;
+
+    double m_startFlagSec = -1;
+    double m_endFlagSec = -1;
+
+    QVector<QCPItemStraightLine *> m_startFlagMarkingSeparator;
+    QVector<QCPItemStraightLine *> m_endFlagMarkingSeparator;
+    FlagState m_flagState = FlagState::Off;
+    bool m_flagMarkingDragging = false;
+    bool m_flagMarkingDragIsStart = false;
+    bool m_flagMarkingDragAccel = false;
+    bool m_flagMarkingDragGyro = false;
+    static constexpr int flagMarkingDragThresholdPx = 67;
 
 // =================== TRIM BLOCK DECLARATION
 
@@ -237,6 +271,7 @@ signals:
     void prevGestureRequested();
     void nextGestureRequested();
     void trimRequested(double loSec, double hiSec);
+    void flagMarkingRequested(int startFlag, int endFlag);
 
     void logMessage(LogLevel level, const QString &text);
 };

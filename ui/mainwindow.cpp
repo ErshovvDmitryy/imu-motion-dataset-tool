@@ -147,6 +147,11 @@ void MainWindow::connectSignals() {
             motionRecorder,
             &MotionRecorder::trimBuffer);
 
+    connect(connectionPage,
+            &ConnectionPage::flagMarkingRequested,
+            motionRecorder,
+            &MotionRecorder::setFlags);
+
 
     auto refreshDatabases = [this]() {
         connectionPage->setAvailableDatabases(dataBaseManager->getRegisteredDatabases());

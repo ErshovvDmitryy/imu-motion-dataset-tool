@@ -32,6 +32,8 @@ struct SelectedRecord {
     QString dbName;
     QString tableName;
     int id;
+    int startFlag;
+    int endFlag;
 };
 
 class ExportCSV : public QWidget
@@ -59,14 +61,16 @@ private:
     void onEditPathClicked();
     void onRefreshInfoClicked();
     void onExportClicked();
+    void onChooseSelectedClicked();
 
     void createFloders(const QString path, const QString nameFloder);
 
     void createReportMassage(QString filePath, const QString reportText);
 
-    void createReport(const QString path, int windowSize, int windowBias);
+    void createReport(const QString path, int windowSize, int windowBias, int maxOffset, int minOffset);
     void createCVSFile(const QString path, int typeMotion, const SelectedRecord &record,
-                       int windowSize, int windowBias);
+                       int windowSize, int windowBias, int maxOffset, int minOffset,
+                       const int startFlag, const int endFlag);
 
     void resetTypeCounter();
 
@@ -93,6 +97,7 @@ private:
     QPushButton *m_updateDB;
     QPushButton *setCustomDB;
 
+    QPushButton *m_btnChooseAllSelected;
     QPushButton *m_btnSelectAllFromParent;
     QPushButton *m_btnUnselectAllFromParent;
 
@@ -111,6 +116,8 @@ private:
     QGroupBox *topWidget;
     QLineEdit *m_windowSize;
     QLineEdit *m_biasWindow;
+    QLineEdit *m_maxStartOffset;
+    QLineEdit *m_minOffset;
     QLineEdit *m_exportPath;
     QLineEdit *m_exportFloderName;
 
