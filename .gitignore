@@ -18,3 +18,5 @@ ui_mainwindow.h
 # Runtime artifacts
 *.db
 *.db-journal
+*.Debug
+*.Release
