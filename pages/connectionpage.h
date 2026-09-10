@@ -201,7 +201,7 @@ private:
     bool m_flagMarkingDragIsStart = false;
     bool m_flagMarkingDragAccel = false;
     bool m_flagMarkingDragGyro = false;
-    static constexpr int flagMarkingDragThresholdPx = 67;
+    static constexpr int flagMarkingDragThresholdPx = 6;
 
 // =================== TRIM BLOCK DECLARATION
 

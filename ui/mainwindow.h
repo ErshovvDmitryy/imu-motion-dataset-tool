@@ -6,6 +6,7 @@
 #include "core/serialport.h"
 #include "core/motionrecorder.h"
 
+
 class QStackedWidget;
 class LeftMenuWidget;
 class ConsoleWidget;
@@ -13,6 +14,7 @@ class StatusBarWidget;
 class ExportCSV;
 class ConnectionPage;
 class DataBasePage;
+class PlotManager;
 
 class MainWindow : public QMainWindow
 {
@@ -36,6 +38,8 @@ private:
     ConsoleWidget *console;
 
     StatusBarWidget *status;
+
+    PlotManager *plotManager;
 
     ConnectionPage *connectionPage;
     DataBasePage *datasetPage;

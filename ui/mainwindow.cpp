@@ -14,6 +14,8 @@
 #include "pages/databasepage.h"
 #include "pages/exportcsv.h"
 
+#include "modules/widgets/plotmanager.h"
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
@@ -28,6 +30,7 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::createWidgets() {
+
     serialPort = new SerialPort;
     dataBaseManager = new DatabaseManager;
     dataBaseManager->initialize();
@@ -45,6 +48,8 @@ void MainWindow::createWidgets() {
 
     connectionPage = new ConnectionPage;
 
+    plotManager = new PlotManager(this);
+
     motionRecorder = new MotionRecorder(dataBaseManager);
 
     datasetPage = new DataBasePage(dataBaseManager);
@@ -58,7 +63,6 @@ void MainWindow::createWidgets() {
 
 void MainWindow::createLayouts() {
     auto *mainLayout = new QHBoxLayout(centralWidget);
-
     auto *rightLayout = new QVBoxLayout;
 
     rightLayout->addWidget(stack);
@@ -228,6 +232,11 @@ void MainWindow::connectSignals() {
 
     connect(exportCSV,
             &ExportCSV::logMessage,
+            console,
+            &ConsoleWidget::logMessage);
+
+    connect(plotManager,
+            &PlotManager::logMessage,
             console,
             &ConsoleWidget::logMessage);
 

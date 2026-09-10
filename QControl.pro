@@ -9,6 +9,7 @@ CONFIG += c++11
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    modules/widgets/plotmanager.cpp \
     pages/connectionpage.cpp \
     pages/createdbdialog.cpp \
     pages/databasepage.cpp \
@@ -30,6 +31,7 @@ HEADERS += \
     models/MotionType.h \
     models/packettype.h \
     models/statusport.h \
+    modules/widgets/plotmanager.h \
     pages/connectionpage.h \
     pages/createdbdialog.h \
     pages/databasepage.h \
