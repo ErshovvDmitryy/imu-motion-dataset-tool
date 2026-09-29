@@ -2,6 +2,10 @@
 #include "core/databasemanager.h"
 
 #include "qcustomplot/qcustomplot.h"
+#include "modules/widgets/plotmanager.h"
+#include "modules/plot/plotconfig.h"
+#include "models/builtinschemas.h"
+#include "models/imuadapter.h"
 
 #include <QLabel>
 #include <QVBoxLayout>
@@ -26,9 +30,35 @@
 #include <QStandardItemModel>
 #include <QTreeView>
 
-DataBasePage::DataBasePage(DatabaseManager *dbManager, QWidget *parent)
+namespace {
+
+const char *kSlotDbAccel = "database/accel";
+const char *kSlotDbGyro = "database/gyro";
+
+PlotConfig defaultDbConfig(const char *title, const char *yLabel, const char *const *fields, int fieldCount) {
+    PlotConfig config;
+    config.schemaName = QString::fromLatin1(BuiltinSchemas::imuName);
+    config.title = QString::fromLatin1(title);
+    config.xMode = XAxisMode::Timestamp;
+    config.relativeTime = true;
+    config.liveWindowSec = 0.0;
+    config.xLabel = QStringLiteral("Time (s)");
+    config.yLabel = QString::fromLatin1(yLabel);
+    for (int i = 0; i < fieldCount; ++i) {
+        config.traces.append(PlotTrace{ QString::fromLatin1(fields[i]), QColor() });
+    }
+    config.applyDefaultColors();
+    return config;
+}
+
+} // namespace
+
+DataBasePage::DataBasePage(DatabaseManager *dbManager, PlotManager *plotManager,
+                           PlotConfigStore *plotConfigStore, QWidget *parent)
     : QWidget(parent)
     , m_dbManager(dbManager)
+    , m_plotManager(plotManager)
+    , m_plotConfigStore(plotConfigStore)
     , m_currentDatabase(QString())
 {
     createWidgets();
@@ -410,95 +440,80 @@ void DataBasePage::loadSampleToGraphs(int sampleId) {
     QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
     if (!db.isOpen()) return;
 
+    reloadFrames(sampleId);
+
+    QSqlQuery typeQuery(db);
+    typeQuery.prepare("SELECT motion_type, start_flag, end_flag FROM samples WHERE id = :id");
+    typeQuery.bindValue(":id", sampleId);
+    if (typeQuery.exec() && typeQuery.next()) {
+        const int motionTypeId = typeQuery.value(0).toInt();
+        updateMotionTypeLegend(motionTypeId);
+
+        const int startFlag = typeQuery.value(1).toInt();
+        const int endFlag = typeQuery.value(2).toInt();
+
+        if ((startFlag != -1 || endFlag != -1) && m_frames.isEmpty() == false) {
+            bool firstOk = false;
+            const double firstT = m_frames.first().timeSeconds(&firstOk);
+            if (firstOk) {
+                if (startFlag >= 0 && startFlag < m_frames.size()) {
+                    bool ok = false;
+                    m_flagStartSec = m_frames.at(startFlag).timeSeconds(&ok) - firstT;
+                    if (ok) {
+                        addFlagLine(m_flagStartSec, true);
+                    }
+                }
+                if (endFlag >= 0 && endFlag < m_frames.size()) {
+                    bool ok = false;
+                    m_flagEndSec = m_frames.at(endFlag).timeSeconds(&ok) - firstT;
+                    if (ok) {
+                        addFlagLine(m_flagEndSec, false);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void DataBasePage::reloadFrames(int sampleId) {
+    QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
+    if (db.isOpen() == false) {
+        return;
+    }
+
     clearFlagSeparators();
     m_flagStartSec = m_flagEndSec = -1;
     btnFlagAccept->setEnabled(false);
     btnFlagDeny->setEnabled(false);
 
     QSqlQuery query(db);
-    query.prepare("SELECT sample_index, ax, ay, az, gx, gy, gz, timestamp FROM motion_data "
+    query.prepare("SELECT ax, ay, az, gx, gy, gz, timestamp FROM motion_data "
                   "WHERE sample_id = :sample_id ORDER BY sample_index");
     query.bindValue(":sample_id", sampleId);
 
-    if (!query.exec()) {
+    if (query.exec() == false) {
         qDebug() << "Failed to load motion data:" << query.lastError().text();
         return;
     }
 
-    for (int i = 0; i < 3; i++) {
-        accelGraph->graph(i)->data()->clear();
-        gyroGraph->graph(i)->data()->clear();
-    }
-
-    double firstTime = 0;
-    bool first = true;
-    int count = 0;
-    double relTime = 0;
-    QVector<double> timestamps;
-
+    m_frames.clear();
     while (query.next()) {
-        double timeSec = query.value("timestamp").toLongLong() / 1000000.0;
-        timestamps.append(timeSec);
-        if (first) {
-            firstTime = timeSec;
-            first = false;
-        }
-        relTime = timeSec - firstTime;
-
-        double ax = query.value("ax").toDouble();
-        double ay = query.value("ay").toDouble();
-        double az = query.value("az").toDouble();
-        double gx = query.value("gx").toDouble();
-        double gy = query.value("gy").toDouble();
-        double gz = query.value("gz").toDouble();
-
-        accelGraph->graph(0)->addData(relTime, ax);
-        accelGraph->graph(1)->addData(relTime, ay);
-        accelGraph->graph(2)->addData(relTime, az);
-
-        gyroGraph->graph(0)->addData(relTime, gx);
-        gyroGraph->graph(1)->addData(relTime, gy);
-        gyroGraph->graph(2)->addData(relTime, gz);
-
-        count++;
+        m_frames.append(ImuAdapter::makeImuFrame(
+            static_cast<float>(query.value("ax").toDouble()),
+            static_cast<float>(query.value("ay").toDouble()),
+            static_cast<float>(query.value("az").toDouble()),
+            static_cast<float>(query.value("gx").toDouble()),
+            static_cast<float>(query.value("gy").toDouble()),
+            static_cast<float>(query.value("gz").toDouble()),
+            static_cast<quint32>(query.value("timestamp").toLongLong()),
+            true));
     }
 
-    for (int i = 0; i < 3; i++) {
-        accelGraph->graph(i)->rescaleAxes(true);
-        gyroGraph->graph(i)->rescaleAxes(true);
+    if (m_plotManager == nullptr) {
+        return;
     }
-
-    accelGraph->xAxis->setRange(0, relTime );
-    gyroGraph->xAxis->setRange(0, relTime);
-
-    accelGraph->yAxis->rescale(true);
-    gyroGraph->yAxis->rescale(true);
-
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
-
-    QSqlQuery typeQuery(db);
-    typeQuery.prepare("SELECT motion_type, start_flag, end_flag FROM samples WHERE id = :id");
-    typeQuery.bindValue(":id", sampleId);
-    if (typeQuery.exec() && typeQuery.next()) {
-        int motionTypeId = typeQuery.value(0).toInt();
-        updateMotionTypeLegend(motionTypeId);
-
-        int startFlag = typeQuery.value(1).toInt();
-        int endFlag = typeQuery.value(2).toInt();
-
-        if ((startFlag != -1 || endFlag != -1) && !timestamps.isEmpty()) {
-            double firstT = timestamps.first();
-            if (startFlag >= 0 && startFlag < timestamps.size()) {
-                m_flagStartSec = timestamps[startFlag] - firstT;
-                addFlagLine(m_flagStartSec, true);
-            }
-            if (endFlag >= 0 && endFlag < timestamps.size()) {
-                m_flagEndSec = timestamps[endFlag] - firstT;
-                addFlagLine(m_flagEndSec, false);
-            }
-        }
-    }
+    m_plotManager->paintFrames(*accelGraph, m_frames);
+    m_plotManager->paintFrames(*gyroGraph, m_frames);
 }
 
 void DataBasePage::navigateSample(int delta) {
@@ -566,8 +581,9 @@ void DataBasePage::onTrimButtonClicked() {
 void DataBasePage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
     if (m_trimState == TrimState::Off && m_flagStartSec < 0) return;
 
-    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
-    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()), sampleId);
+    const int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
+    Q_UNUSED(sampleId)
+    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()));
 
     if (m_trimState == TrimState::AwaitStart) {
         m_trimStartSec = sec;
@@ -629,8 +645,7 @@ void DataBasePage::onGraphMousePress(QMouseEvent *event, QCustomPlot *plot) {
 }
 
 void DataBasePage::onGraphMouseMove(QMouseEvent *event, QCustomPlot *plot) {
-    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
-    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()), sampleId);
+    double sec = clampToData(plot->xAxis->pixelToCoord(event->pos().x()));
 
     if (m_trimDragging) {
         if (m_trimDragIsStart) {
@@ -664,61 +679,45 @@ void DataBasePage::onGraphMouseRelease(QMouseEvent *event, QCustomPlot *plot) {
 }
 
 void DataBasePage::addTrimLine(double sec, bool isStart) {
-    auto *lineA = new QCPItemStraightLine(accelGraph);
-    lineA->point1->setCoords(sec, 0);
-    lineA->point2->setCoords(sec, 1);
-    lineA->setPen(QPen(isStart ? Qt::green : Qt::red, 2, Qt::SolidLine));
-
-    auto *lineG = new QCPItemStraightLine(gyroGraph);
-    lineG->point1->setCoords(sec, 0);
-    lineG->point2->setCoords(sec, 1);
-    lineG->setPen(QPen(isStart ? Qt::green : Qt::red, 2, Qt::SolidLine));
-
-    if (isStart) {
-        for (QCPItemStraightLine *l : m_trimLinesStart)
-            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
-        m_trimLinesStart.clear();
-        m_trimLinesStart.append(lineA);
-        m_trimLinesStart.append(lineG);
-    } else {
-        for (QCPItemStraightLine *l : m_trimLinesEnd)
-            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
-        m_trimLinesEnd.clear();
-        m_trimLinesEnd.append(lineA);
-        m_trimLinesEnd.append(lineG);
+    if (m_plotManager == nullptr) {
+        return;
     }
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+    const MarkerType type = isStart ? MarkerType::TrimStart : MarkerType::TrimEnd;
+    m_plotManager->clearMarkers(*accelGraph, type);
+    m_plotManager->clearMarkers(*gyroGraph, type);
+    m_plotManager->addMarker(*accelGraph, sec, type);
+    m_plotManager->addMarker(*gyroGraph, sec, type);
 }
 
 void DataBasePage::updateTrimLine(double sec, bool isStart) {
-    const QVector<QCPItemStraightLine *> &vec = isStart ? m_trimLinesStart : m_trimLinesEnd;
-    for (QCPItemStraightLine *line : vec) {
-        line->point1->setCoords(sec, 0);
-        line->point2->setCoords(sec, 1);
+    if (m_plotManager == nullptr) {
+        return;
     }
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+    const MarkerType type = isStart ? MarkerType::TrimStart : MarkerType::TrimEnd;
+    m_plotManager->setMarkerX(*accelGraph, type, sec);
+    m_plotManager->setMarkerX(*gyroGraph, type, sec);
 }
 
 void DataBasePage::clearTrimSeparators() {
-    for (QCPItemStraightLine *line : m_trimLinesStart)
-        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
-    for (QCPItemStraightLine *line : m_trimLinesEnd)
-        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
-    m_trimLinesStart.clear();
-    m_trimLinesEnd.clear();
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+    if (m_plotManager == nullptr) {
+        return;
+    }
+    for (QCustomPlot *plot : { accelGraph, gyroGraph }) {
+        m_plotManager->clearMarkers(*plot, MarkerType::TrimStart);
+        m_plotManager->clearMarkers(*plot, MarkerType::TrimEnd);
+    }
 }
 
 void DataBasePage::setTrimInteractionEnabled(bool on) {
+    if (m_plotManager == nullptr) {
+        return;
+    }
     if (on) {
-        accelGraph->setInteraction(QCP::iRangeDrag, false);
-        gyroGraph->setInteraction(QCP::iRangeDrag, false);
+        m_plotManager->setRangeDragEnabled(*accelGraph, false);
+        m_plotManager->setRangeDragEnabled(*gyroGraph, false);
     } else {
-        accelGraph->setInteraction(QCP::iRangeDrag, m_rangeDragAccel);
-        gyroGraph->setInteraction(QCP::iRangeDrag, m_rangeDragGyro);
+        m_plotManager->setRangeDragEnabled(*accelGraph, m_rangeDragAccel);
+        m_plotManager->setRangeDragEnabled(*gyroGraph, m_rangeDragGyro);
     }
 }
 
@@ -734,63 +733,45 @@ void DataBasePage::resetTrim() {
 }
 
 void DataBasePage::addFlagLine(double sec, bool isStart) {
-    QPen flagPen(isStart ? QColor(255, 165, 0) : QColor(0, 191, 255), 2, Qt::DashLine);
-
-    auto *lineA = new QCPItemStraightLine(accelGraph);
-    lineA->point1->setCoords(sec, 0);
-    lineA->point2->setCoords(sec, 1);
-    lineA->setPen(flagPen);
-
-    auto *lineG = new QCPItemStraightLine(gyroGraph);
-    lineG->point1->setCoords(sec, 0);
-    lineG->point2->setCoords(sec, 1);
-    lineG->setPen(flagPen);
-
-    if (isStart) {
-        for (QCPItemStraightLine *l : m_flagLinesStart)
-            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
-        m_flagLinesStart.clear();
-        m_flagLinesStart.append(lineA);
-        m_flagLinesStart.append(lineG);
-    } else {
-        for (QCPItemStraightLine *l : m_flagLinesEnd)
-            if (l && l->parentPlot()) l->parentPlot()->removeItem(l);
-        m_flagLinesEnd.clear();
-        m_flagLinesEnd.append(lineA);
-        m_flagLinesEnd.append(lineG);
+    if (m_plotManager == nullptr) {
+        return;
     }
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+    const MarkerType type = isStart ? MarkerType::FlagStart : MarkerType::FlagEnd;
+    m_plotManager->clearMarkers(*accelGraph, type);
+    m_plotManager->clearMarkers(*gyroGraph, type);
+    m_plotManager->addMarker(*accelGraph, sec, type);
+    m_plotManager->addMarker(*gyroGraph, sec, type);
 }
 
 void DataBasePage::updateFlagLine(double sec, bool isStart) {
-    const QVector<QCPItemStraightLine *> &vec = isStart ? m_flagLinesStart : m_flagLinesEnd;
-    for (QCPItemStraightLine *line : vec) {
-        line->point1->setCoords(sec, 0);
-        line->point2->setCoords(sec, 1);
+    if (m_plotManager == nullptr) {
+        return;
     }
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+    const MarkerType type = isStart ? MarkerType::FlagStart : MarkerType::FlagEnd;
+    m_plotManager->setMarkerX(*accelGraph, type, sec);
+    m_plotManager->setMarkerX(*gyroGraph, type, sec);
 }
 
 void DataBasePage::clearFlagSeparators() {
-    for (QCPItemStraightLine *line : m_flagLinesStart)
-        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
-    for (QCPItemStraightLine *line : m_flagLinesEnd)
-        if (line && line->parentPlot()) line->parentPlot()->removeItem(line);
-    m_flagLinesStart.clear();
-    m_flagLinesEnd.clear();
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
+    if (m_plotManager == nullptr) {
+        return;
+    }
+    for (QCustomPlot *plot : { accelGraph, gyroGraph }) {
+        m_plotManager->clearMarkers(*plot, MarkerType::FlagStart);
+        m_plotManager->clearMarkers(*plot, MarkerType::FlagEnd);
+    }
 }
 
 void DataBasePage::setFlagInteractionEnabled(bool on) {
+    if (m_plotManager == nullptr) {
+        return;
+    }
     if (on) {
-        accelGraph->setInteraction(QCP::iRangeDrag, false);
-        gyroGraph->setInteraction(QCP::iRangeDrag, false);
+        m_plotManager->setRangeDragEnabled(*accelGraph, false);
+        m_plotManager->setRangeDragEnabled(*gyroGraph, false);
     } else {
-        accelGraph->setInteraction(QCP::iRangeDrag, m_flagDragAccel);
-        gyroGraph->setInteraction(QCP::iRangeDrag, m_flagDragGyro);
+        m_plotManager->setRangeDragEnabled(*accelGraph, m_flagDragAccel);
+        m_plotManager->setRangeDragEnabled(*gyroGraph, m_flagDragGyro);
     }
 }
 
@@ -798,17 +779,22 @@ void DataBasePage::applyFlagsToDatabase(int sampleId, int startFlag, int endFlag
     m_dbManager->updateFlags(m_currentDatabase, sampleId, startFlag, endFlag);
 }
 
-double DataBasePage::clampToData(double sec, int sampleId) const {
+double DataBasePage::clampToData(double sec) const {
+    if (m_currentSampleRow < 0 || m_dbManager == nullptr) return sec;
+
     QSqlDatabase db = m_dbManager->getDatabase(m_currentDatabase);
     if (!db.isOpen()) return sec;
+
+    int sampleId = samplesModel->data(samplesModel->index(m_currentSampleRow, 0)).toInt();
 
     QSqlQuery query(db);
     query.prepare("SELECT MIN(timestamp), MAX(timestamp) FROM motion_data WHERE sample_id = :id");
     query.bindValue(":id", sampleId);
     if (!query.exec() || !query.next()) return sec;
+    if (query.value(0).isNull() || query.value(1).isNull()) return sec;
 
-    double first = query.value(0).toLongLong() / 1000000.0;
-    double last = query.value(1).toLongLong() / 1000000.0;
+    const double first = query.value(0).toLongLong() / 1000000.0;
+    const double last  = query.value(1).toLongLong() / 1000000.0;
     return qBound(0.0, sec, last - first);
 }
 
@@ -1027,12 +1013,11 @@ void DataBasePage::onDeleteFromDataSetClicked() {
     m_selectedList.removeAll(sampleId);
 
     resetTrim();
-    for (int i = 0; i < 3; i++) {
-        accelGraph->graph(i)->data()->clear();
-        gyroGraph->graph(i)->data()->clear();
+    m_frames.clear();
+    if (m_plotManager != nullptr) {
+        m_plotManager->clearPlot(*accelGraph);
+        m_plotManager->clearPlot(*gyroGraph);
     }
-    accelGraph->replot(QCustomPlot::rpQueuedReplot);
-    gyroGraph->replot(QCustomPlot::rpQueuedReplot);
 
     samplesModel->select();
     motionDataModel->select();
@@ -1060,30 +1045,33 @@ void DataBasePage::updateMotionTypeLegend(int highlightId) {
 }
 
 void DataBasePage::setupGraph() {
-
-    gyroGraph = new QCustomPlot();
-    accelGraph = new QCustomPlot();
-    gyroGraph->setMinimumSize(200, 200);
-    accelGraph->setMinimumSize(200, 200);
-
-    gyroGraph->xAxis->setLabel("Time (s)");
-    gyroGraph->yAxis->setLabel("Gyro (°/с)");
-    accelGraph->xAxis->setLabel("Time (s)");
-    accelGraph->yAxis->setLabel("Accel (g)");
-
-    for (int i = 0; i < 3; i++){
-        gyroGraph->addGraph();
-        accelGraph->addGraph();
+    if (m_plotManager == nullptr) {
+        return;
     }
 
-    gyroGraph->graph(0)->setPen(QPen(Qt::red));
-    accelGraph->graph(0)->setPen(QPen(Qt::red));
+    static const char *accelFields[] = { BuiltinSchemas::ImuField::ax, BuiltinSchemas::ImuField::ay,
+                                         BuiltinSchemas::ImuField::az };
+    static const char *gyroFields[] = { BuiltinSchemas::ImuField::gx, BuiltinSchemas::ImuField::gy,
+                                        BuiltinSchemas::ImuField::gz };
 
-    gyroGraph->graph(1)->setPen(QPen(Qt::green));
-    accelGraph->graph(1)->setPen(QPen(Qt::green));
+    const QString accelSlot = QLatin1String(kSlotDbAccel);
+    const QString gyroSlot = QLatin1String(kSlotDbGyro);
 
-    gyroGraph->graph(2)->setPen(QPen(Qt::blue));
-    accelGraph->graph(2)->setPen(QPen(Qt::blue));
+    const PlotConfig accelFallback =
+        defaultDbConfig("Accelerometer", "Accel (g)", accelFields, 3);
+    const PlotConfig gyroFallback = defaultDbConfig("Gyroscope", "Gyro (dps)", gyroFields, 3);
+
+    const PlotConfig accelConfig =
+        m_plotConfigStore != nullptr && m_plotConfigStore->has(accelSlot)
+            ? m_plotConfigStore->config(accelSlot)
+            : accelFallback;
+    const PlotConfig gyroConfig =
+        m_plotConfigStore != nullptr && m_plotConfigStore->has(gyroSlot)
+            ? m_plotConfigStore->config(gyroSlot)
+            : gyroFallback;
+
+    accelGraph = m_plotManager->createPlot(accelSlot, accelConfig, 200, 200);
+    gyroGraph = m_plotManager->createPlot(gyroSlot, gyroConfig, 200, 200);
 }
 
 void DataBasePage::setupButtonsOnPage() {

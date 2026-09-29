@@ -17,6 +17,8 @@ signals:
 
     void connectionClicked();
 
+    void messagesClicked();
+
     void exportClicked();
 
     void datasetClicked();
@@ -24,6 +26,8 @@ signals:
 private:
 
     QPushButton *connectionButton;
+
+    QPushButton *messagesButton;
 
     QPushButton *exportButton;
 

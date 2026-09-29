@@ -1,11 +1,8 @@
 #pragma once
 
-#include <QVector>
+#include <cstdint>
 
 struct MotionSample {
-
-    QVector<float> accel;   // ax, ay, az
-    QVector<float> gyro;    // gx, gy, gz
 
     float ax;
     float ay;

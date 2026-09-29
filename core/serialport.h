@@ -1,40 +1,40 @@
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
 #include <QSerialPort>
-#include <QByteArray>
 #include <QSerialPortInfo>
 
-#include "models/motionsample.h"
+#include "models/loglevel.h"
 #include "models/portconfig.h"
 #include "models/statusport.h"
-#include "models/loglevel.h"
 
+// Только транспорт: открывает порт и отдаёт поток байт как есть.
+// Разбором потока занимается MessageDecoder - так протокол можно менять
+// без правок этого класса.
 class SerialPort : public QObject
 {
     Q_OBJECT
 
 public:
     explicit SerialPort(QObject *parent = nullptr);
-    ~SerialPort();
+    ~SerialPort() override;
 
     void openPort(const PortConfig &config);
     void closePort();
 
-    bool connectStatus();
+    bool connectStatus() const;
     ConnectionState state() const;
+    QString portName() const;
 
     QStringList updatePortList();
 
+    quint64 bytesReceived() const;
+
 signals:
-    void motionPacketReceived(const MotionPacket &packet);
-
-    void segmentEndReceived(const SegmentEndPacket &packet);
-
+    void rawDataReceived(const QByteArray &data);
     void portDisconnected();
-
     void connectionChanged(ConnectionState state);
-
     void logMessage(LogLevel level, const QString &text);
 
 private slots:
@@ -44,12 +44,7 @@ private slots:
 private:
     void setState(ConnectionState state);
 
-    QSerialPort *serial;
-    QByteArray buffer;
-    ConnectionState currentState = ConnectionState::Disconnected;
-
-    int frameLength(quint8 type) const;
-
-    bool parseMotionPacket(const QByteArray &frame, MotionPacket &packet);
-    bool parseSegmentEnd(const QByteArray &frame, SegmentEndPacket &packet);
+    QSerialPort *m_serial;
+    ConnectionState m_state = ConnectionState::Disconnected;
+    quint64 m_bytes = 0;
 };

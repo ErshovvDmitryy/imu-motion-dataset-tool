@@ -12,10 +12,12 @@ LeftMenuWidget::LeftMenuWidget(QWidget *parent)
     auto *layout = new QVBoxLayout(this);
 
     connectionButton = new QPushButton("Connection");
+    messagesButton = new QPushButton("Messages");
     exportButton = new QPushButton("Export to csv");
     datasetButton = new QPushButton("Datasets");
 
     layout->addWidget(connectionButton);
+    layout->addWidget(messagesButton);
     layout->addWidget(exportButton);
     layout->addWidget(datasetButton);
 
@@ -23,6 +25,9 @@ LeftMenuWidget::LeftMenuWidget(QWidget *parent)
 
     connect(connectionButton,&QPushButton::clicked,
             this,&LeftMenuWidget::connectionClicked);
+
+    connect(messagesButton,&QPushButton::clicked,
+            this,&LeftMenuWidget::messagesClicked);
 
     connect(exportButton,&QPushButton::clicked,
             this,&LeftMenuWidget::exportClicked);

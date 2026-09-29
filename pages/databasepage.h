@@ -7,6 +7,7 @@
 #include "pages/createdbdialog.h"
 #include "pages/opendbdialog.h"
 #include "models/MotionType.h"
+#include "models/datapacket.h"
 
 class QLabel;
 class QVBoxLayout;
@@ -25,6 +26,8 @@ class QCPItemStraightLine;
 class QSqlQuery;
 class QItemSelectionModel;
 class QItemSelection;
+class PlotManager;
+class PlotConfigStore;
 
 class DataBasePage : public QWidget
 {
@@ -32,7 +35,8 @@ class DataBasePage : public QWidget
 
 public:
 
-    explicit DataBasePage(DatabaseManager *dbManager, QWidget *parent = nullptr);
+    explicit DataBasePage(DatabaseManager *dbManager, PlotManager *plotManager,
+                          PlotConfigStore *plotConfigStore, QWidget *parent = nullptr);
 
 private:
 
@@ -70,8 +74,11 @@ private:
     void clearTrimSeparators();
     void resetTrim();
     void setTrimInteractionEnabled(bool on);
-    double clampToData(double sec, int sampleId) const;
+    double clampToData(double sec) const;
     void applyTrimToDatabase(int sampleId, double loSec, double hiSec);
+    // Кадры, по которому сейчас нарисован график: из них берётся
+    // диапазон времени для расстановки маркеров.
+    void reloadFrames(int sampleId);
 
     void addFlagLine(double sec, bool isStart);
     void updateFlagLine(double sec, bool isStart);
@@ -156,12 +163,15 @@ private:
     QVector<int> m_selectedList;
     int m_currentSampleRow = -1;
 
+    DatabaseManager *m_dbManager = nullptr;
+    PlotManager *m_plotManager = nullptr;
+    PlotConfigStore *m_plotConfigStore = nullptr;
+    QVector<DataFrame> m_frames;
+
     enum class TrimState { Off, AwaitStart, AwaitEnd, Adjust };
     TrimState m_trimState = TrimState::Off;
     double m_trimStartSec = -1;
     double m_trimEndSec = -1;
-    QVector<QCPItemStraightLine *> m_trimLinesStart;
-    QVector<QCPItemStraightLine *> m_trimLinesEnd;
     bool m_trimDragging = false;
     bool m_trimDragIsStart = false;
     bool m_rangeDragAccel = false;
@@ -170,8 +180,6 @@ private:
 
     double m_flagStartSec = -1;
     double m_flagEndSec = -1;
-    QVector<QCPItemStraightLine *> m_flagLinesStart;
-    QVector<QCPItemStraightLine *> m_flagLinesEnd;
     bool m_flagDragging = false;
     bool m_flagDragIsStart = false;
     bool m_flagDragAccel = false;
@@ -180,7 +188,6 @@ private:
 
     QLineEdit *m_pathEdit;
 
-    DatabaseManager *m_dbManager;
     QString m_currentDatabase;
 
 signals:

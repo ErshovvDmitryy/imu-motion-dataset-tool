@@ -9,46 +9,68 @@ CONFIG += c++11
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    core/databasemanager.cpp \
+    core/motionrecorder.cpp \
+    core/protocol/frameparser.cpp \
+    core/protocol/messagedecoder.cpp \
+    core/serialport.cpp \
+    main.cpp \
+    models/builtinschemas.cpp \
+    models/datapacket.cpp \
+    models/dataschema.cpp \
+    models/datavalue.cpp \
+    models/imuadapter.cpp \
+    models/schemastore.cpp \
+    modules/plot/plotconfig.cpp \
+    modules/slicer/windowslicer.cpp \
+    modules/widgets/plotconfigdialog.cpp \
     modules/widgets/plotmanager.cpp \
     pages/connectionpage.cpp \
     pages/createdbdialog.cpp \
     pages/databasepage.cpp \
     pages/exportcsv.cpp \
+    pages/messageeditpage.cpp \
     pages/opendbdialog.cpp \
-    widgets/consolewidget.cpp \
-    core/databasemanager.cpp \
-    widgets/leftmenuwidget.cpp \
-    main.cpp \
-    ui/mainwindow.cpp \
     qcustomplot/qcustomplot.cpp \
-    core/serialport.cpp \
-    widgets/statusbarwidget.cpp \
-    core/motionrecorder.cpp \
-    modules/slicer/windowslicer.cpp
+    ui/mainwindow.cpp \
+    widgets/consolewidget.cpp \
+    widgets/leftmenuwidget.cpp \
+    widgets/statusbarwidget.cpp
 
 HEADERS += \
+    core/databasemanager.h \
+    core/motionrecorder.h \
+    core/protocol/frameparser.h \
+    core/protocol/messagedecoder.h \
+    core/serialport.h \
     models/AnalysisConfig.h \
     models/MotionType.h \
+    models/builtinschemas.h \
+    models/datapacket.h \
+    models/dataschema.h \
+    models/datavalue.h \
+    models/imuadapter.h \
+    models/loglevel.h \
+    models/motionsample.h \
     models/packettype.h \
+    models/portconfig.h \
+    models/schemastore.h \
     models/statusport.h \
+    modules/plot/plotconfig.h \
+    modules/slicer/windowslicer.h \
+    modules/widgets/plotconfigdialog.h \
     modules/widgets/plotmanager.h \
     pages/connectionpage.h \
     pages/createdbdialog.h \
     pages/databasepage.h \
     pages/exportcsv.h \
+    pages/messageeditpage.h \
     pages/opendbdialog.h \
-    widgets/consolewidget.h \
-    core/databasemanager.h \
-    widgets/leftmenuwidget.h \
-    ui/mainwindow.h \
     qcustomplot/qcustomplot.h \
-    core/serialport.h \
-    models/loglevel.h \
-    models/motionsample.h \
-    models/portconfig.h \
-    widgets/statusbarwidget.h \
-    core/motionrecorder.h \
-    modules/slicer/windowslicer.h
+    ui/mainwindow.h \
+    widgets/consolewidget.h \
+    widgets/leftmenuwidget.h \
+    widgets/statusbarwidget.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

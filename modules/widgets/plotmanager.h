@@ -1,62 +1,130 @@
 #pragma once
 
-#include <QObject>
-#include <QWidget>
 #include <QHash>
 #include <QList>
-#include <QPen>
-#include <QColor>
+#include <QSharedPointer>
+#include <QString>
+#include <QVector>
+#include <QWidget>
 
-#include "models/motionsample.h"
+#include "models/datapacket.h"
+#include "models/dataschema.h"
 #include "models/loglevel.h"
+#include "modules/plot/plotconfig.h"
 
 class QCustomPlot;
 class QCPItemStraightLine;
+class PlotConfigStore;
+class PlotConfigDialog;
 
-enum class SeporatorTypes : int {
-    SEPARATOR_NONE = 0,
-    SEPARATOR_LINE,
-    SEPARATOR_DASHED,
-    SEPARATOR_POINTS,
-    SEPARATOR_FLAG
+// Смысловые типы вертикальных маркеров на графике. Цвет и начертание
+// заданы по умолчанию, но переопределяются при вызове addMarker.
+enum class MarkerType : int {
+    Separator = 0,  // граница сегмента
+    TrimStart,      // начало обрезки
+    TrimEnd,        // конец обрезки
+    FlagStart,      // флаг начала жеста
+    FlagEnd         // флаг конца жеста
 };
 
-struct PlotInfo {
-    QList<QCPItemStraightLine*> m_separatorLines;
-    QList<QCPItemStraightLine*> m_dynamicLines;
-    QList<QCPItemStraightLine*> m_flags;
-    int totalGraph = 0;
-};
-
+// Владеет всеми QCustomPlot в приложении: создаёт их по PlotConfig,
+// кормит кадрами DataFrame, рисует маркеры и открывает диалог настройки
+// по правому клику. Страницы не трогают QCustomPlot напрямую.
 class PlotManager : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit PlotManager(QObject *parent = nullptr);
+    explicit PlotManager(QWidget *parent = nullptr);
+    ~PlotManager() override;
 
-    QCustomPlot* setupGraph(int totalGraphs,
-                            const QString &xLabel,
-                            const QString &yLabel,
+    // Схемы нужны для легенды и для диалога настройки.
+    void setSchemas(const QList<DataSchema> &schemas);
+    QList<DataSchema> schemas() const;
+    DataSchema schema(const QString &name) const;
+
+    void setConfigStore(PlotConfigStore *store);
+
+    // Создать график. slotId - ключ настройки в PlotConfigStore.
+    QCustomPlot *createPlot(const QString &slotId, const PlotConfig &config,
                             int minWidth = 200, int minHeight = 250);
 
-    void addToGraph(QCustomPlot &plot, const MotionSample &sample);
-    void paintGraph(QCustomPlot &plot, const QVector<MotionSample> &motionSaved);
-    void clearGraph(QCustomPlot &plot);
+    PlotConfig config(QCustomPlot &plot) const;
+    // Перестроить график под новую настройку. Данные сбрасываются:
+    // они относятся к прежнему набору переменных.
+    bool applyConfig(QCustomPlot &plot, const PlotConfig &config);
 
-    void addSeparator(QCustomPlot &plot, double x,
-                      SeporatorTypes type, const QColor &color = Qt::red);
-    void clearSeparators(QCustomPlot &plot);
+    // ================= Живой поток =================
+
+    // Добавить кадр. Возвращает false, если кадр не относится к этому
+    // графику (другое сообщение) - тогда перерисовывать нечего.
+    bool appendFrame(QCustomPlot &plot, const DataFrame &frame);
+    // Перерисовать и сдвинуть окно на последнюю точку.
+    void refreshLive(QCustomPlot &plot);
+
+    // ================= Готовый набор кадров =================
+
+    void paintFrames(QCustomPlot &plot, const QVector<DataFrame> &frames);
+    void clearPlot(QCustomPlot &plot);
+    bool isEmpty(QCustomPlot &plot) const;
+
+    // ================= Маркеры =================
+
+    void addMarker(QCustomPlot &plot, double x, MarkerType type,
+                   const QColor &color = QColor());
+    // Сдвинуть единственный маркер типа. Возвращает false, если его нет.
+    bool setMarkerX(QCustomPlot &plot, MarkerType type, double x);
+    void clearMarkers(QCustomPlot &plot, MarkerType type);
+    void clearAllMarkers(QCustomPlot &plot);
+    bool hasMarker(QCustomPlot &plot, MarkerType type) const;
+
+    // ================= Разное =================
+
+    // Диапазон X по данным графика. false, если данных нет.
+    bool dataXRange(QCustomPlot &plot, double *lo, double *hi) const;
+    // Перевод между координатой на графике (с учётом relativeTime) и
+    // абсолютным значением X кадра. Нужно страницам, которые считают
+    // отрезки времени по данным, а рисуют их поверх графика.
+    double plotXToAbsolute(QCustomPlot &plot, double plotX) const;
+    double absoluteToPlotX(QCustomPlot &plot, double absolute) const;
+    // Абсолютная координата нуля, от которой считается relativeTime.
+    double timeOrigin(QCustomPlot &plot) const;
+    // Заблокировать перетаскивание диапазона (нужно при расстановке маркеров).
+    void setRangeDragEnabled(QCustomPlot &plot, bool enabled);
+    bool isRangeDragEnabled(QCustomPlot &plot) const;
+
+    // X-координата кадра по настройке, без вычитания начала.
+    // Общая точка правды для графика и для расчёта индексов при обрезке.
+    static double xValueFor(const PlotConfig &config, const DataFrame &frame, int index);
 
 signals:
+    void plotConfigured(const QString &slotId, const PlotConfig &config);
     void logMessage(LogLevel level, const QString &text);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
-    void addLineToPlot(QCustomPlot &plot, double x, const QPen &pen,
-                       QList<QCPItemStraightLine*> PlotInfo::*listMember);
+    struct PlotState {
+        PlotConfig config;
+        QString slotId;
+        int pointCount = 0;     // для xMode == Index
+        double originX = 0.0;   // значение, вычитаемое при relativeTime
+        bool originSet = false;
+        bool live = false;
+        QHash<int, QList<QCPItemStraightLine *>> markers;
+    };
 
-    static QPen penForType(SeporatorTypes type, const QColor &color);
-    static float timeUINT32toFloat(uint32_t time) { return time / 1000000.0f; }
+    PlotState *stateFor(QCustomPlot &plot);
+    void buildGraphs(QCustomPlot &plot, PlotState &state);
+    void syncAxes(QCustomPlot &plot, PlotState &state);
+    double nextX(PlotState &state, const DataFrame &frame);
+    static QPen penForMarker(MarkerType type, const QColor &color);
+    static QString traceName(const DataSchema *schema, const QString &field);
+    void openConfigDialog(QCustomPlot &plot);
 
-    QHash<QCustomPlot*, PlotInfo> mapPlotInfo;
+    QHash<QCustomPlot *, PlotState> m_states;
+    QHash<QString, QSharedPointer<const DataSchema>> m_schemas;
+    PlotConfigStore *m_store = nullptr;
+    PlotConfigDialog *m_dialog = nullptr;
 };

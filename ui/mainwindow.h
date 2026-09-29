@@ -5,6 +5,8 @@
 #include "core/databasemanager.h"
 #include "core/serialport.h"
 #include "core/motionrecorder.h"
+#include "models/datapacket.h"
+#include "models/schemastore.h"
 
 
 class QStackedWidget;
@@ -14,7 +16,10 @@ class StatusBarWidget;
 class ExportCSV;
 class ConnectionPage;
 class DataBasePage;
+class MessageEditPage;
 class PlotManager;
+class MessageDecoder;
+class PlotConfigStore;
 
 class MainWindow : public QMainWindow
 {
@@ -28,6 +33,9 @@ private:
     void createWidgets();
     void createLayouts();
     void connectSignals();
+    void registerMetaTypes();
+    // Раздать всем страницам текущий набор схем.
+    void publishSchemas();
 
     QWidget *centralWidget;
 
@@ -39,10 +47,15 @@ private:
 
     StatusBarWidget *status;
 
+    // Ядро: хранилище схем -> декодер -> потребители.
+    SchemaStore *schemaStore;
+    MessageDecoder *messageDecoder;
     PlotManager *plotManager;
+    PlotConfigStore *plotConfigStore;
 
     ConnectionPage *connectionPage;
     DataBasePage *datasetPage;
+    MessageEditPage *messageEditPage;
     ExportCSV *exportCSV;
     SerialPort *serialPort;
     DatabaseManager *dataBaseManager;
